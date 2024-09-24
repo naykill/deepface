@@ -3,7 +3,7 @@ import faiss
 import numpy as np
 
 # Load embedding dari file CSV
-df = pd.read_csv("face_embeddings.csv")
+df = pd.read_csv("./Belajar-DeepFace/face_embeddings.csv")
 
 # Convert embedding dari string ke list (jika disimpan sebagai string)
 df['embedding'] = df['embedding'].apply(eval)
@@ -19,6 +19,6 @@ index = faiss.IndexFlatL2(num_dimensions)
 index.add(embeddings)
 
 # Simpan indeks FAISS jika diperlukan
-faiss.write_index(index, "faiss_index.bin")
+faiss.write_index(index, "./Belajar-Deepface/faiss_index.bin")
 
 print("FAISS index created and saved to faiss_index.bin")
