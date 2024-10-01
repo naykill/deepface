@@ -31,10 +31,23 @@ def simpan_data(nama, posisi, foto_path):
     
     # Membaca data yang sudah ada
     df = pd.read_csv(CSV_FILE)
+
     
-    # Menambah data baru
+    
+    # # Menambah data baru
+    # tanggal = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # df = df.append({"Nama": nama, "Posisi": posisi, "Foto": foto_path, "Tanggal": tanggal}, ignore_index=True)
+    
+    # # Menyimpan data kembali ke file CSV
+    # df.to_csv(CSV_FILE, index=False)
+
+
+  # Membaca data yang sudah ada
     tanggal = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    df = df.append({"Nama": nama, "Posisi": posisi, "Foto": foto_path, "Tanggal": tanggal}, ignore_index=True)
+    new_data = pd.DataFrame({"Nama": [nama], "Posisi": [posisi], "Foto": [foto_path], "Tanggal": [tanggal]})
+    
+    # Menggunakan pd.concat untuk menambahkan data baru
+    df = pd.concat([df, new_data], ignore_index=True)
     
     # Menyimpan data kembali ke file CSV
     df.to_csv(CSV_FILE, index=False)
@@ -60,12 +73,3 @@ if st.button("Simpan Data"):
 
 
 
-st.write(1234)
-st.write(
-    pd.DataFrame(
-        {
-            "first column": [1, 2, 3, 4],
-            "second column": [10, 20, 30, 40],
-        }
-    )
-)
