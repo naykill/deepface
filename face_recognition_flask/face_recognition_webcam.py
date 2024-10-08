@@ -13,8 +13,9 @@ def update_frame():
         # Convert frame ke format RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # Deteksi wajah
-        faces = face_cascade.detectMultiScale(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), 1.3, 5)
+    # Inisialisasi webcam dan deteksi wajah
+    cap = cv2.VideoCapture(0)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
         # Jika ada wajah yang terdeteksi
         if len(faces) > 0:

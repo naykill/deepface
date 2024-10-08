@@ -4,7 +4,7 @@ import numpy as np
 
 def initialize_faiss():
     # Load embedding dari file CSV
-    df = pd.read_csv("./Belajar-DeepFace/face_embeddings.csv")
+    df = pd.read_csv("./face_recognition_flask/face_embeddings.csv")
 
     # Convert embedding dari string ke list (jika disimpan sebagai string)
     df['embedding'] = df['embedding'].apply(eval)

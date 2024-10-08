@@ -19,10 +19,10 @@ if not os.path.exists(FOTO_FOLDER):
     os.makedirs(FOTO_FOLDER)
 
 # Function to save data to CSV
-def simpan_data(nama, posisi, foto_path, embedding):
+def simpan_data(name, foto_path, embedding, posisi):
     # Check if CSV exists
     if not os.path.isfile(CSV_FILE):
-        df = pd.DataFrame(columns=["Nama", "Posisi", "Embedding"])
+        df = pd.DataFrame(columns=["name", "embedding", "posisi"])
         df.to_csv(CSV_FILE, index=False)
     
     # Read existing data
@@ -30,9 +30,9 @@ def simpan_data(nama, posisi, foto_path, embedding):
     
     # Add new data
     new_data = pd.DataFrame({
-        "Nama": [nama],
-        "Posisi": [posisi],
-        "Embedding": [embedding]  # Save embedding directly as a list
+        "name": [name],
+        "embedding": [embedding],
+        "posisi": [posisi]  # Save embedding directly as a list
     })
     
     # Use pd.concat to add new data
@@ -67,9 +67,9 @@ def faiss_to_json(index, df):
     data_json = []
     for i, row in df.iterrows():
         data_json.append({
-            "Nama": row["Nama"],
-            "Posisi": row["Posisi"],
-            "Embedding": embeddings_list[i]
+            "name": row["name"],
+            "embedding": embeddings_list[i],
+            "posisi": row["posisi"]
         })
 
     json_data = json.dumps(data_json, indent=4)
@@ -97,15 +97,15 @@ st.title("Employee Registration and Photo Submission")
 st.write("Please enter your name, position, and capture or upload a photo.")
 
 # Input fields for name and position
-nama = st.text_input("Name")
-posisi = st.text_input("Position")
+name = st.text_input("name")
+posisi = st.text_input("position")
 
 # Camera input for capturing photo
 foto = st.camera_input("Capture Photo")
 
 # Save data and photo when button is clicked
 if st.button("Save Data"):
-    if nama and posisi and foto:
+    if name and posisi and foto:
         # Convert to a format suitable for OpenCV
         file_bytes = np.asarray(bytearray(foto.read()), dtype=np.uint8)
         image = cv2.imdecode(file_bytes, 1)
@@ -115,14 +115,14 @@ if st.button("Save Data"):
         
         if cropped_face is not None:
             # Save the cropped photo
-            foto_path = os.path.join(FOTO_FOLDER, f"{nama}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg")
+            foto_path = os.path.join(FOTO_FOLDER, f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg")
             cv2.imwrite(foto_path, cropped_face)  # Save the cropped face
             
             # Generate embedding
             embedding = generate_embedding(foto_path)
             
             # Save data to CSV
-            simpan_data(nama, posisi, foto_path, embedding)  # Save embedding directly
+            simpan_data(name, foto_path, embedding, posisi)  # Save embedding directly
             
             st.success(f"Data successfully saved! Photo saved at: {foto_path}")
         else:
@@ -144,11 +144,11 @@ if uploaded_foto is not None:
     
     if cropped_face is not None:
         # Save the cropped photo
-        foto_path = os.path.join(FOTO_FOLDER, f"{nama}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg")
+        foto_path = os.path.join(FOTO_FOLDER, f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg")
         cv2.imwrite(foto_path, cropped_face)  # Save the cropped face
         
         # Display the uploaded image
-        st.image(cropped_face, caption=f"Cropped photo for {nama}", use_column_width=True)
+        st.image(cropped_face, caption=f"Cropped photo for {name}", use_column_width=True)
         
         # Generate embedding and save
         embedding = generate_embedding(foto_path)
