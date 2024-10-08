@@ -18,8 +18,8 @@ def update_frame():
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
         # Jika ada wajah yang terdeteksi
-        if len(faces) > 0:
-            for (x, y, w, h) in faces:
+    if len(face_cascade) > 0:
+            for (x, y, w, h) in face_cascade:
                 # Tampilkan kotak hijau di sekitar wajah
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 
@@ -48,10 +48,10 @@ def update_frame():
                     print(f"Error: {e}")
 
         # Convert frame ke format Image untuk Tkinter
-        img = Image.fromarray(rgb_frame)
-        imgtk = ImageTk.PhotoImage(image=img)
-        lmain.imgtk = imgtk
-        lmain.configure(image=imgtk)
+    img = Image.fromarray(rgb_frame)
+    imgtk = ImageTk.PhotoImage(image=img)
+    lmain.imgtk = imgtk
+    lmain.configure(image=imgtk)
         
     lmain.after(10, update_frame)
 
