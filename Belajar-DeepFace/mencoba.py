@@ -71,4 +71,11 @@ if st.button("Simpan Data"):
         st.error("Mohon lengkapi semua data (nama, posisi, dan foto).")
 
 
+# PS D:\Magang TLAB\deepface\deepface_baru\Belajar-DeepFace> streamlit run "d:\Magang TLAB\deepface\deepface_baru\Belajar-DeepFace\mencoba.py"
+# >>
+
+#   You can now view your Streamlit app in your browser.      
+
+#   Local URL: http://localhost:8501
+#   Network URL: http://172.254.1.50:8501
 
