@@ -2,7 +2,6 @@ import streamlit as st  # Digunakan untuk membangun antarmuka aplikasi web inter
 import pandas as pd  # Untuk mengelola data tabular dan menyimpan/menambah data ke file CSV
 import os  # Untuk berinteraksi dengan sistem file
 from PIL import Image  # Library untuk memanipulasi gambar
-from datetime import datetime  # Untuk timestamp
 import cv2  # Library untuk deteksi dan manipulasi gambar
 
 # Folder untuk menyimpan foto pengguna
@@ -77,8 +76,8 @@ foto = st.camera_input("Ambil Foto")
 # Simpan data dan foto ketika tombol diklik
 if st.button("Simpan Data"):
     if nama and posisi and foto:
-        # Simpan foto asli
-        foto_path = os.path.join(FOTO_FOLDER, f"{nama}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+        # Simpan foto asli tanpa timestamp
+        foto_path = os.path.join(FOTO_FOLDER, f"{nama}.png")
         with open(foto_path, "wb") as f:
             f.write(foto.getbuffer())
         
@@ -95,4 +94,3 @@ if st.button("Simpan Data"):
         
     else:
         st.error("Mohon lengkapi semua data (nama, posisi, dan foto).")
-
