@@ -34,13 +34,13 @@ name_to_position = {
 }
 
 # Inisialisasi DataFrame Pandas untuk menyimpan nama dan embedding
-df = pd.DataFrame(columns=["name", "embedding", "posisi"])
+df = pd.DataFrame(columns=["Nama", "Posisi", "Embedding"])
 
 model_name = "Facenet"  # Nama model DeepFace
 detector_backend = "opencv"  # Backend untuk deteksi wajah
 
 # Loop melalui folder dan buat embedding
-for r, d, files in os.walk("./Belajar-DeepFace/"):
+for r, d, files in os.walk("./Belajar-DeepFace"):
     for file in files:
         if ".jpg" in file:
             exact_file = f"{r}/{file}"
@@ -63,7 +63,7 @@ for r, d, files in os.walk("./Belajar-DeepFace/"):
                     for obj in objs:
                         embedding = obj["embedding"]
                         # Buat DataFrame baru dari nama dan embedding yang dihasilkan
-                        new_row = pd.DataFrame({"name": [name], "embedding": [embedding], "posisi": [posisi]})
+                        new_row = pd.DataFrame({"Nama": [name], "Posisi": [posisi], "Embedding": [embedding]})
                         
                         # Gabungkan DataFrame baru ke DataFrame utama menggunakan pd.concat()
                         df = pd.concat([df, new_row], ignore_index=True)
