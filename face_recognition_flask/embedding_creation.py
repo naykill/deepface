@@ -41,7 +41,7 @@ def create_embeddings(image_folder):
     detector_backend = "opencv"  # Backend untuk deteksi wajah
 
     # Loop melalui folder dan buat embedding
-    for r, d, files in os.walk("./Belajar-DeepFace/"):
+    for r, d, files in os.walk("../Belajar-DeepFace"):
         for file in files:
             if ".jpg" in file:
                 exact_file = f"{r}/{file}"

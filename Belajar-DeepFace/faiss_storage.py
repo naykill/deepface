@@ -6,10 +6,10 @@ import numpy as np
 df = pd.read_csv("./Belajar-DeepFace/face_embeddings.csv")
 
 # Convert embedding dari string ke list (jika disimpan sebagai string)
-df['embedding'] = df['embedding'].apply(eval)
+df['Embedding'] = df['Embedding'].apply(eval)
 
 # Extract embedding dan konversi ke numpy array
-embeddings = np.array(df['embedding'].tolist(), dtype='f')
+embeddings = np.array(df['Embedding'].tolist(), dtype='f')
 
 # Inisialisasi FAISS
 num_dimensions = 128  # Dimensi embedding (untuk Facenet)

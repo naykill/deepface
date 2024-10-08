@@ -10,10 +10,10 @@ import matplotlib.pyplot as plt
 # Load indeks FAISS dan DataFrame embedding
 index = faiss.read_index("./Belajar-Deepface/faiss_index.bin")
 df = pd.read_csv("./Belajar-DeepFace/face_embeddings.csv")
-df['embedding'] = df['embedding'].apply(eval)
+df['Embedding'] = df['Embedding'].apply(eval)
 
 # Inisialisasi webcam dan deteksi wajah
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 # Set interval pengambilan gambar (10 detik)
@@ -59,8 +59,8 @@ while True:
                 closest_match_idx = neighbours[0][0]
 
                 if closest_match_idx < len(df):
-                    match_name = df.iloc[closest_match_idx]['name']
-                    position = df.iloc[closest_match_idx]['posisi']
+                    match_name = df.iloc[closest_match_idx]['Nama']
+                    position = df.iloc[closest_match_idx]['Posisi']
                     print(f"Match found: {match_name}")
                     print(f"Hallo {match_name} {position}, selamat datang")
                     # Tampilkan wajah dan match
@@ -69,7 +69,7 @@ while True:
                     plt.imshow(rgb_face)
                     plt.axis("off")
                     fig.add_subplot(1, 2, 2)
-                    plt.imshow(plt.imread(f"./Belajar-DeepFace/{df.iloc[closest_match_idx]['name']}.jpg"))
+                    plt.imshow(plt.imread(f"../deepface/Belajar-DeepFace/{df.iloc[closest_match_idx]['Nama']}.jpg"))
                     plt.axis("off")
                     plt.show()
 
