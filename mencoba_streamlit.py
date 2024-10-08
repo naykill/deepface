@@ -52,6 +52,10 @@ def simpan_data(nama, posisi, foto_path):
     # Menyimpan data kembali ke file CSV
     df.to_csv(CSV_FILE, index=False)
 
+    #menambah crop
+
+    
+
 # Mengambil foto
 foto = st.camera_input("Ambil Foto")
 
@@ -69,7 +73,4 @@ if st.button("Simpan Data"):
         st.success(f"Data berhasil disimpan! Foto disimpan di: {foto_path}")
     else:
         st.error("Mohon lengkapi semua data (nama, posisi, dan foto).")
-
-
-
 
