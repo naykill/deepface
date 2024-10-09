@@ -152,7 +152,7 @@ if uploaded_foto is not None:
         
         # Generate embedding and save
         embedding = generate_embedding(foto_path)
-        simpan_data(nama, posisi, foto_path, embedding)
+        simpan_data(name, posisi, foto_path, embedding)
 
         st.success(f"Data successfully saved with uploaded photo at: {foto_path}")
     else:

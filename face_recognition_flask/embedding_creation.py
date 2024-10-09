@@ -41,7 +41,7 @@ def create_embeddings(image_folder):
     detector_backend = "opencv"  # Backend untuk deteksi wajah
 
     # Loop melalui folder dan buat embedding
-    for r, d, files in os.walk("../Belajar-DeepFace"):
+    for r, d, files in os.walk("./Belajar-DeepFace/"):
         for file in files:
             if ".jpg" in file:
                 exact_file = f"{r}/{file}"
@@ -76,7 +76,7 @@ def create_embeddings(image_folder):
 
     # Simpan embedding dan nama ke dalam file CSV
     if not df.empty:
-        df.to_csv("./face_recognition_flask/face_embeddings.csv", index=False)
+        df.to_csv("./Belajar-DeepFace/face_embeddings.csv", index=False)
         print("Embeddings telah disimpan dengan nama file embeddings.csv")
     else:
         print("Tidak ada embedding yang disimpan. Pastikan file gambar memiliki wajah.")
