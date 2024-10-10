@@ -122,5 +122,39 @@ def identify_employee():
 
 
 
+@app.route('/identify-employee', methods=['POST'])
+def identify_employee():
+    image_base64 = request.json['image']
+    model_name = "Facenet"
+    detector_backend = "opencv"
+    df = pd.read_csv(embedding_file)
+    # Decode base64 image
+    image_bytes = base64.b64decode(image_base64)
+    img_array = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+    # Generate embedding wajah
+    target_embedding = DeepFace.represent(
+        img_path=img,
+        model_name=model_name,
+        detector_backend=detector_backend,
+        enforce_detection=False
+    )[0]["embedding"]
+
+    # Convert embedding ke numpy dan expand dimensinya
+    target_embedding = np.expand_dims(np.array(target_embedding, dtype='f'), axis=0)
+
+    # Cari embedding terdekat di FAISS
+    index = faiss.read_index("./Belajar-DeepFace/faiss_index.bin")
+    k = 1
+    distances, neighbours = index.search(target_embedding, k)
+
+    if neighbours[0][0] < len(df):
+        match_name = df.iloc[neighbours[0][0]]['name']
+        position = df.iloc[neighbours[0][0]]['posisi']
+        return jsonify({"name": match_name, "position": position}), 200
+
+    return jsonify({"message": "Tidak ada kecocokan ditemukan."}), 404
+
 if __name__ == '__main__':
     app.run(debug=True, host='127.0.0.1', port=5000)
