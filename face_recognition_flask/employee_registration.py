@@ -3,12 +3,6 @@ import pandas as pd
 import os
 import cv2
 import numpy as np
-from PIL import Image
-from datetime import datetime
-from deepface import DeepFace
-import faiss
-import json
-import ast
 
 # Folder and file setup for saving data
 FOTO_FOLDER = 'foto_user'
