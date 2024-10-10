@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 # Load indeks FAISS dan DataFrame embedding
 index = faiss.read_index("./Belajar-Deepface/faiss_index.bin")
 df = pd.read_csv("./Belajar-DeepFace/face_embeddings.csv")
-df['Embedding'] = df['Embedding'].apply(eval)
+df['embedding'] = df['embedding'].apply(eval)
 
 # Inisialisasi webcam dan deteksi wajah
 cap = cv2.VideoCapture(1)
@@ -59,19 +59,12 @@ while True:
                 closest_match_idx = neighbours[0][0]
 
                 if closest_match_idx < len(df):
-                    match_name = df.iloc[closest_match_idx]['Nama']
-                    position = df.iloc[closest_match_idx]['Posisi']
+                    match_name = df.iloc[closest_match_idx]['name']
+                    position = df.iloc[closest_match_idx]['posisi']
                     print(f"Match found: {match_name}")
                     print(f"Hallo {match_name} {position}, selamat datang")
                     # Tampilkan wajah dan match
-                    fig = plt.figure(figsize=(7, 7))
-                    fig.add_subplot(1, 2, 1)
-                    plt.imshow(rgb_face)
-                    plt.axis("off")
-                    fig.add_subplot(1, 2, 2)
-                    plt.imshow(plt.imread(f"../deepface/Belajar-DeepFace/{df.iloc[closest_match_idx]['Nama']}.jpg"))
-                    plt.axis("off")
-                    plt.show()
+                    
 
             # Reset time waktu capture dari webcam secara otomatis
             start_time = current_time
