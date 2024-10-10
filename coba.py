@@ -5,7 +5,7 @@ import numpy as np
 
 def main():
     # Inisialisasi webcam
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
 
     img_counter = 0
     detector_backend = "opencv"  # Atur backend deteksi wajah
