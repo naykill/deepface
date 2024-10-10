@@ -13,7 +13,7 @@ df = pd.read_csv("./Belajar-DeepFace/face_embeddings.csv")
 df['embedding'] = df['embedding'].apply(eval)
 
 # Inisialisasi webcam dan deteksi wajah
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 # Set interval pengambilan gambar (10 detik)
@@ -64,14 +64,7 @@ while True:
                     print(f"Match found: {match_name}")
                     print(f"Hallo {match_name} {position}, selamat datang")
                     # Tampilkan wajah dan match
-                    fig = plt.figure(figsize=(7, 7))
-                    fig.add_subplot(1, 2, 1)
-                    plt.imshow(rgb_face)
-                    plt.axis("off")
-                    fig.add_subplot(1, 2, 2)
-                    plt.imshow(plt.imread(f"./Belajar-DeepFace/{df.iloc[closest_match_idx]['name']}.jpg"))
-                    plt.axis("off")
-                    plt.show()
+                    
 
             # Reset time waktu capture dari webcam secara otomatis
             start_time = current_time
