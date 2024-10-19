@@ -5,6 +5,8 @@ import json
 import cv2
 import numpy as np
 import pandas as pd
+from PIL import Image
+from io import BytesIO
 
 # Function to convert file image to base64
 def convert_image_to_base64(image):
@@ -17,9 +19,9 @@ positions = [
     "Accountant", "Marketing Specialist", "UI/UX Designer", "Business Analyst"
 ]
 
-# Sidebar with three menu options
+# Sidebar with menu options
 st.sidebar.title("Menu")
-menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "List Data Karyawan", "Edit/Hapus Karyawan"])
+menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "Data Karyawan", "Edit/Hapus Karyawan"])
 
 # Function to crop face from the image
 def crop_face(image):
@@ -40,12 +42,8 @@ def read_image(uploaded_image):
 if menu == "Pendaftaran Karyawan":
     st.title("Pendaftaran Karyawan")
 
-    # Input employee name, position, and photo
     name = st.text_input("Nama Karyawan")
-
-    # Using the positions list defined globally
     position = st.selectbox("Posisi Karyawan", positions)
-
     foto = st.camera_input("Capture Foto Karyawan")
     uploaded_image = st.file_uploader("Unggah Foto Karyawan", type=["jpg", "jpeg", "png"])
 
@@ -76,17 +74,42 @@ if menu == "Pendaftaran Karyawan":
         else:
             st.warning("Mohon lengkapi semua data sebelum mengirim.")
 
-# List employees
-elif menu == "List Data Karyawan":
-    st.title("List Data Karyawan")
+# List employees with photos
+elif menu == "Data Karyawan":
+    st.title("Data Karyawan")
 
-    response = requests.get("http://127.0.0.1:5000/employees")
+    response = requests.get("http://127.0.0.1:5000/employees-info")
 
     if response.status_code == 200:
-        data = response.json()
-        if data:
-            df = pd.DataFrame(data)
-            st.table(df[["name", "position"]])
+        employees = response.json()
+        if employees:
+            # Create a list to hold the rows of our table
+            table_data = []
+            
+            for emp in employees:
+                # Convert base64 image to displayable format
+                image_data = base64.b64decode(emp['image_base64'])
+                img = Image.open(BytesIO(image_data))
+                
+                # Resize image to make it smaller in the table
+                img.thumbnail((100, 100))
+                
+                # Convert PIL Image to bytes
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                
+                # Create HTML for the image
+                img_html = f'<img src="data:image/png;base64,{img_str}" style="width:100px;">'
+                
+                # Add this employee's data to our table
+                table_data.append([emp['name'], emp['position'], img_html])
+            
+            # Create DataFrame
+            df = pd.DataFrame(table_data, columns=["Nama", "Posisi", "Foto"])
+            
+            # Display the table
+            st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
         else:
             st.write("Tidak ada data karyawan yang tersedia.")
     else:
@@ -96,8 +119,7 @@ elif menu == "List Data Karyawan":
 elif menu == "Edit/Hapus Karyawan":
     st.title("Edit atau Hapus Data Karyawan")
 
-    # Fetch list of employees for selection
-    response = requests.get("http://127.0.0.1:5000/employees")
+    response = requests.get("http://127.0.0.1:5000/employees-full")
     if response.status_code == 200:
         data = response.json()
         if data:
@@ -105,7 +127,6 @@ elif menu == "Edit/Hapus Karyawan":
             employee = st.selectbox("Pilih Karyawan untuk Diedit atau Dihapus", df["name"])
             selected_employee = df[df["name"] == employee].iloc[0]
 
-            # Edit employee details
             st.subheader("Edit Data Karyawan")
             updated_name = st.text_input("Nama Karyawan", value=selected_employee["name"])
             updated_position = st.selectbox("Posisi Karyawan", positions, index=positions.index(selected_employee["position"]))
@@ -119,7 +140,6 @@ elif menu == "Edit/Hapus Karyawan":
                 else:
                     st.error(f"Error: {response.text}")
 
-            # Delete employee
             st.subheader("Hapus Karyawan")
             if st.button("Hapus Karyawan"):
                 response = requests.delete(f"http://127.0.0.1:5000/delete-employee/{selected_employee['id']}")
@@ -127,5 +147,3 @@ elif menu == "Edit/Hapus Karyawan":
                     st.success("Karyawan berhasil dihapus!")
                 else:
                     st.error(f"Error: {response.text}")
-    else:
-        st.error(f"Gagal mengambil data karyawan. Error: {response.text}")
