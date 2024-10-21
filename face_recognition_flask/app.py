@@ -5,44 +5,72 @@ import numpy as np
 import faiss
 import base64
 import cv2
+import json
 
 app = Flask(__name__)
 
 # Path to SQLite database
 db_path = './face_embeddings.db'
 
-# Initialize SQLite database and create table if it doesn't exist
+# Initialize SQLite database and create tables if they don't exist
 def init_db():
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            position TEXT,
-            embedding BLOB
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        
+        # Table for storing embeddings (already exists)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                position TEXT,
+                embedding BLOB
+            )
+        ''')
 
-# Insert employee data into SQLite
-def insert_employee(name, position, embedding):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO employees (name, position, embedding) VALUES (?, ?, ?)", 
-                   (name, position, embedding))
-    conn.commit()
-    conn.close()
+        # New table for storing employee images and info
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS employee_info (
+                employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                position TEXT,
+                image_base64 TEXT
+            )
+        ''')
+        conn.commit()
 
-# Retrieve all embeddings from the SQLite database
+# Insert employee data into both employee_info and employees tables
+def insert_employee(name, position, embedding, image_base64):
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+
+        # Insert into employees (embedding table)
+        cursor.execute("INSERT INTO employees (name, position, embedding) VALUES (?, ?, ?)", 
+                       (name, position, embedding))
+
+        # Insert into employee_info (image table)
+        cursor.execute("INSERT INTO employee_info (name, position, image_base64) VALUES (?, ?, ?)", 
+                       (name, position, image_base64))
+        
+        conn.commit()
+
 def fetch_embeddings():
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, position, embedding FROM employees")
-    data = cursor.fetchall()
-    conn.close()
-    return data
+       with sqlite3.connect(db_path) as conn:
+           cursor = conn.cursor()
+           cursor.execute("SELECT id, name, position, embedding FROM employees")
+           data = cursor.fetchall()
+
+           encoded_data = []
+           for row in data:
+               id, name, position, embedding_blob = row
+               embedding_base64 = base64.b64encode(embedding_blob).decode('utf-8')
+               encoded_data.append({
+                   "id": id,
+                   "name": name,
+                   "position": position,
+                   "embedding": embedding_base64
+               })
+       
+       return encoded_data
 
 # Convert embeddings stored as blob back to numpy array
 def convert_embedding(blob):
@@ -53,13 +81,13 @@ def register_employee():
     data = request.json
     name = data['name']
     position = data['position']
-    image_base64 = data['image']
+    image_base64 = data['image']  # The base64 image data
 
     model_name = "Facenet"
     detector_backend = "opencv"
 
     try:
-        # Decode base64 image
+        # Decode base64 image to process it with DeepFace
         image_bytes = base64.b64decode(image_base64)
         img_array = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
@@ -75,25 +103,36 @@ def register_employee():
         if len(objs) > 0:
             embedding = np.array(objs[0]['embedding'], dtype='f')
             embedding_blob = embedding.tobytes()  # Convert numpy array to binary
-            insert_employee(name, position, embedding_blob)  # Save employee to DB
+
+            # Insert employee into both tables (embedding and image data)
+            insert_employee(name, position, embedding_blob, image_base64)
+
             return jsonify({"message": "Karyawan berhasil didaftarkan!"}), 200
         else:
             return jsonify({"message": "Tidak ada wajah terdeteksi."}), 400
 
     except Exception as e:
+        print(f"Error during registration: {str(e)}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
 @app.route('/identify-employee', methods=['POST'])
 def identify_employee():
-    image_base64 = request.json['image']
+    data = request.json
+    if not data or 'image' not in data:
+        return jsonify({"message": "No image data provided"}), 400
+
+    image_base64 = data['image']
     model_name = "Facenet"
-    detector_backend = "opencv"
+    detector_backend = "mtcnn"
 
     try:
         # Decode base64 image
         image_bytes = base64.b64decode(image_base64)
         img_array = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+        if img is None:
+            return jsonify({"message": "Failed to decode image"}), 400
 
         # Generate embedding
         target_embedding = DeepFace.represent(
@@ -103,7 +142,7 @@ def identify_employee():
             enforce_detection=False
         )[0]["embedding"]
 
-        target_embedding = np.expand_dims(np.array(target_embedding, dtype='f'), axis=0)
+        target_embedding = np.array(target_embedding, dtype='f')
 
         # Fetch all embeddings from the database
         employees_data = fetch_embeddings()
@@ -112,97 +151,142 @@ def identify_employee():
         embeddings = []
         employee_details = []
         for emp in employees_data:
-            name, position, embedding_blob = emp
-            embedding = convert_embedding(embedding_blob)
+            name, position, embedding_blob = emp['name'], emp['position'], emp['embedding']
+            embedding = np.frombuffer(base64.b64decode(embedding_blob), dtype='f')
             embeddings.append(embedding)
             employee_details.append((name, position))
 
         embeddings = np.array(embeddings, dtype='f')
 
         # Initialize FAISS index and search for the closest match
-        num_dimensions = 128
+        num_dimensions = embeddings.shape[1]
         index = faiss.IndexFlatL2(num_dimensions)
         index.add(embeddings)
         k = 1  # Find the closest match
-        distances, neighbours = index.search(target_embedding, k)
+        distances, neighbours = index.search(np.array([target_embedding]), k)
 
-        if neighbours[0][0] < len(employee_details):
+        if len(neighbours) > 0 and neighbours[0][0] < len(employee_details):
             match_name, position = employee_details[neighbours[0][0]]
             return jsonify({"name": match_name, "position": position}), 200
 
         return jsonify({"message": "Tidak ada kecocokan ditemukan."}), 404
 
+    except ValueError as ve:
+        print(f"ValueError during identification: {str(ve)}")
+        return jsonify({"message": f"ValueError: {str(ve)}"}), 400
     except Exception as e:
+        print(f"Error during identification: {str(e)}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
-
+    
 @app.route('/employees', methods=['GET'])
 def get_employees():
     try:
         employees_data = fetch_embeddings()
         if employees_data:
-            employees_list = [{'name': emp[0], 'position': emp[1]} for emp in employees_data]
-            return jsonify(employees_list), 200
+            return jsonify(employees_data), 200
         else:
             return jsonify({"message": "Tidak ada data karyawan."}), 404
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
     
-@app.route('/update-employee/<int:id>', methods=['PUT'])
-def update_employee(id):
+@app.route('/employees-full', methods=['GET'])
+def get_employees_full():
+       try:
+           with sqlite3.connect(db_path) as conn:
+               cursor = conn.cursor()
+               cursor.execute("SELECT id, name, position, embedding FROM employees")
+               data = cursor.fetchall()
+
+               employees_data = []
+               for row in data:
+                   id, name, position, embedding_blob = row
+                   embedding_base64 = base64.b64encode(embedding_blob).decode('utf-8')
+                   employees_data.append({
+                       "id": id,
+                       "name": name,
+                       "position": position,
+                       "embedding": embedding_base64
+                   })
+
+           return jsonify(employees_data), 200
+       except Exception as e:
+           return jsonify({"message": f"Error: {str(e)}"}), 500
+    
+# Fetch all employee info from the employee_info table
+@app.route('/employees-info', methods=['GET'])
+def get_employees_info():
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT employee_id, name, position, image_base64 FROM employee_info")
+            data = cursor.fetchall()
+
+            employee_list = []
+            for row in data:
+                employee_id, name, position, image_base64 = row
+                employee_list.append({
+                    'employee_id': employee_id,
+                    'name': name,
+                    'position': position,
+                    'image_base64': image_base64
+                })
+
+            return jsonify(employee_list), 200
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+# Update employee in employee_info and employees table
+@app.route('/update-employee/<int:employee_id>', methods=['PUT'])
+def update_employee(employee_id):
     data = request.json
     name = data.get('name')
     position = data.get('position')
+    image_base64 = data.get('image_base64', None)  # Optional field
 
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
 
-        # Check if employee exists
-        cursor.execute("SELECT * FROM employees WHERE id = ?", (id,))
-        employee = cursor.fetchone()
+            # Update employee_info
+            if image_base64:
+                cursor.execute("""
+                    UPDATE employee_info SET name = ?, position = ?, image_base64 = ?
+                    WHERE employee_id = ?
+                """, (name, position, image_base64, employee_id))
+            else:
+                cursor.execute("""
+                    UPDATE employee_info SET name = ?, position = ?
+                    WHERE employee_id = ?
+                """, (name, position, employee_id))
 
-        if employee:
-            # Update employee details
+            # Update employees (embedding table)
             cursor.execute("""
-                UPDATE employees
-                SET name = ?, position = ?
+                UPDATE employees SET name = ?, position = ?
                 WHERE id = ?
-            """, (name, position, id))
+            """, (name, position, employee_id))
+            
             conn.commit()
             return jsonify({"message": "Karyawan berhasil diperbarui!"}), 200
-        else:
-            return jsonify({"message": "Karyawan tidak ditemukan."}), 404
-
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-    finally:
-        conn.close()
-
-@app.route('/delete-employee/<int:id>', methods=['DELETE'])
-def delete_employee(id):
+# Delete employee from both tables
+@app.route('/delete-employee/<int:employee_id>', methods=['DELETE'])
+def delete_employee(employee_id):
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
 
-        # Check if employee exists
-        cursor.execute("SELECT * FROM employees WHERE id = ?", (id,))
-        employee = cursor.fetchone()
+            # Delete from employee_info
+            cursor.execute("DELETE FROM employee_info WHERE employee_id = ?", (employee_id,))
 
-        if employee:
-            # Delete employee
-            cursor.execute("DELETE FROM employees WHERE id = ?", (id,))
+            # Delete from employees (embedding table)
+            cursor.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
+
             conn.commit()
             return jsonify({"message": "Karyawan berhasil dihapus!"}), 200
-        else:
-            return jsonify({"message": "Karyawan tidak ditemukan."}), 404
-
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
-
-    finally:
-        conn.close()
-
 
 if __name__ == '__main__':
     init_db()  # Initialize the database
