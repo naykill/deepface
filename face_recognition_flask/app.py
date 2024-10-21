@@ -123,7 +123,7 @@ def identify_employee():
 
     image_base64 = data['image']
     model_name = "Facenet"
-    detector_backend = "mtcnn"
+    detector_backend = "opencv"
 
     try:
         # Decode base64 image
