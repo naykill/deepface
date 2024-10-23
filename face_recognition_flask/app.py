@@ -1,13 +1,15 @@
-import sqlite3
+# Server Side (Laptop 1) - app.py
 from flask import Flask, request, jsonify
+from flask_cors import CORS  # Add CORS support
+import sqlite3
 from deepface import DeepFace
 import numpy as np
 import faiss
 import base64
 import cv2
-import json
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Path to SQLite database
 db_path = './face_embeddings.db'
@@ -289,5 +291,6 @@ def delete_employee(employee_id):
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    init_db()  # Initialize the database
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    init_db()
+    # Change host to '0.0.0.0' to allow external access
+    app.run(debug=False, host='0.0.0.0', port=5000)
