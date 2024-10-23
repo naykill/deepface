@@ -3,6 +3,7 @@ import base64
 import requests
 import numpy as np
 import time
+from datetime import datetime
 
 # Inisialisasi webcam
 cap = cv2.VideoCapture(1)  # Ganti dengan 1 jika menggunakan webcam eksternal
@@ -18,7 +19,20 @@ SERVER_URL = "http://172.254.2.153:5000"
 capture_interval = 3
 start_time = time.time()
 
+# Tambahkan variabel untuk tracking absensi
+attendance_recorded = set()  # Untuk mencatat siapa saja yang sudah absen hari ini
+current_date = datetime.now().strftime('%Y-%m-%d')
+
+def reset_attendance_record():
+    global attendance_recorded, current_date
+    new_date = datetime.now().strftime('%Y-%m-%d')
+    if new_date != current_date:
+        attendance_recorded.clear()
+        current_date = new_date
+
 while True:
+    reset_attendance_record()  # Reset data absensi jika hari berganti
+    
     # Baca frame dari webcam
     ret, frame = cap.read()
     if not ret:
@@ -48,6 +62,28 @@ while True:
                                              headers={'Content-Type': 'application/json'})
                     if response.status_code == 200:
                         data = response.json()
+                        employee_name = data['name']
+                        # Cek apakah karyawan sudah absen hari ini
+                        if employee_name not in attendance_recorded:
+                            # Catat absensi
+                            attendance_response = requests.post(
+                                "http://127.0.0.1:5000/record-attendance",
+                                json={
+                                    "name": employee_name,
+                                    "image": image_base64,
+                                    "status": "masuk"
+                                }
+                            )
+                            
+                            if attendance_response.status_code == 200:
+                                attendance_data = attendance_response.json()
+                                print(f"Absensi berhasil: {employee_name}")
+                                print(f"Tanggal: {attendance_data['date']}")
+                                print(f"Jam: {attendance_data['time']}")
+                                attendance_recorded.add(employee_name)
+                            else:
+                                print(f"Gagal mencatat absensi: {attendance_response.json()['message']}")
+                        
                         print(f"Selamat datang {data['name']} - {data['position']}")
                     else:
                         print(f"Error: {response.json().get('message', 'Unknown error')}")
