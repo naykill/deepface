@@ -12,6 +12,8 @@ from io import BytesIO
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
+SERVER_URL = "http://172.254.2.153:5000"
+
 # List of positions available
 positions = [
     "President Director", "IT Manager", "Software Engineer", "Data Analyst", 
@@ -63,7 +65,7 @@ if menu == "Pendaftaran Karyawan":
                 image_base64 = base64.b64encode(buffer).decode("utf-8")
 
                 data = {"name": name, "position": position, "image": image_base64}
-                response = requests.post("http://127.0.0.1:5000/register-employee", json=data)
+                response = requests.post(f"{SERVER_URL}/register-employee", json=data)
 
                 if response.status_code == 200:
                     st.success("Karyawan berhasil didaftarkan!")
@@ -78,7 +80,7 @@ if menu == "Pendaftaran Karyawan":
 elif menu == "Data Karyawan":
     st.title("Data Karyawan")
 
-    response = requests.get("http://127.0.0.1:5000/employees-info")
+    response = requests.get(f"{SERVER_URL}/employees-info")
 
     if response.status_code == 200:
         employees = response.json()
@@ -119,7 +121,7 @@ elif menu == "Data Karyawan":
 elif menu == "Edit/Hapus Karyawan":
     st.title("Edit atau Hapus Data Karyawan")
 
-    response = requests.get("http://127.0.0.1:5000/employees-full")
+    response = requests.get(f"{SERVER_URL}/employees-full")
     if response.status_code == 200:
         data = response.json()
         if data:
@@ -133,7 +135,7 @@ elif menu == "Edit/Hapus Karyawan":
 
             if st.button("Simpan Perubahan"):
                 update_data = {"name": updated_name, "position": updated_position}
-                response = requests.put(f"http://127.0.0.1:5000/update-employee/{selected_employee['id']}", json=update_data)
+                response = requests.put(f"{SERVER_URL}/update-employee/{selected_employee['id']}", json=update_data)
 
                 if response.status_code == 200:
                     st.success("Data karyawan berhasil diperbarui!")
@@ -142,7 +144,7 @@ elif menu == "Edit/Hapus Karyawan":
 
             st.subheader("Hapus Karyawan")
             if st.button("Hapus Karyawan"):
-                response = requests.delete(f"http://127.0.0.1:5000/delete-employee/{selected_employee['id']}")
+                response = requests.delete(f"{SERVER_URL}/delete-employee/{selected_employee['id']}")
                 if response.status_code == 200:
                     st.success("Karyawan berhasil dihapus!")
                 else:

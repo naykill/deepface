@@ -12,6 +12,8 @@ if not cap.isOpened():
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
+SERVER_URL = "http://172.254.2.153:5000"
+
 # Set interval pengambilan gambar (3 detik)
 capture_interval = 3
 start_time = time.time()
@@ -41,7 +43,7 @@ while True:
 
                 # Kirim gambar ke server untuk identifikasi
                 try:
-                    response = requests.post("http://127.0.0.1:5000/identify-employee", 
+                    response = requests.post(f"{SERVER_URL}/identify-employee", 
                                              json={"image": image_base64},
                                              headers={'Content-Type': 'application/json'})
                     if response.status_code == 200:
