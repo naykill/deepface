@@ -12,6 +12,8 @@ from io import BytesIO
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
+SERVER_URL = "http://172.254.2.153:5000"
+
 # List of positions available
 positions = [
     "President Director", "IT Manager", "Software Engineer", "Data Analyst", 
@@ -21,7 +23,7 @@ positions = [
 
 # Sidebar with menu options
 st.sidebar.title("Menu")
-menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "Data Karyawan", "Edit/Hapus Karyawan"])
+menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "Data Karyawan", "Edit/Hapus Karyawan","Log Absensi"])
 
 # Function to crop face from the image
 def crop_face(image):
@@ -63,7 +65,7 @@ if menu == "Pendaftaran Karyawan":
                 image_base64 = base64.b64encode(buffer).decode("utf-8")
 
                 data = {"name": name, "position": position, "image": image_base64}
-                response = requests.post("http://127.0.0.1:5000/register-employee", json=data)
+                response = requests.post(f"{SERVER_URL}/register-employee", json=data)
 
                 if response.status_code == 200:
                     st.success("Karyawan berhasil didaftarkan!")
@@ -78,7 +80,7 @@ if menu == "Pendaftaran Karyawan":
 elif menu == "Data Karyawan":
     st.title("Data Karyawan")
 
-    response = requests.get("http://127.0.0.1:5000/employees-info")
+    response = requests.get(f"{SERVER_URL}/employees-info")
 
     if response.status_code == 200:
         employees = response.json()
@@ -133,7 +135,7 @@ elif menu == "Edit/Hapus Karyawan":
 
             if st.button("Simpan Perubahan"):
                 update_data = {"name": updated_name, "position": updated_position}
-                response = requests.put(f"http://127.0.0.1:5000/update-employee/{selected_employee['id']}", json=update_data)
+                response = requests.put(f"{SERVER_URL}/update-employee/{selected_employee['id']}", json=update_data)
 
                 if response.status_code == 200:
                     st.success("Data karyawan berhasil diperbarui!")
@@ -142,8 +144,109 @@ elif menu == "Edit/Hapus Karyawan":
 
             st.subheader("Hapus Karyawan")
             if st.button("Hapus Karyawan"):
-                response = requests.delete(f"http://127.0.0.1:5000/delete-employee/{selected_employee['id']}")
+                response = requests.delete(f"{SERVER_URL}/delete-employee/{selected_employee['id']}")
                 if response.status_code == 200:
                     st.success("Karyawan berhasil dihapus!")
                 else:
                     st.error(f"Error: {response.text}")
+
+#menu log
+elif menu == "Log Absensi":
+    st.title("Log Absensi Karyawan")
+    
+    # Tambahkan filter
+    col1, col2 = st.columns(2)
+    with col1:
+        # Get all employees for filter
+        emp_response = requests.get(f"{SERVER_URL}/employees-full")
+        if emp_response.status_code == 200:
+            employees = emp_response.json()
+            employee_names = ["Semua Karyawan"] + [emp["name"] for emp in employees]
+            selected_employee = st.selectbox("Filter berdasarkan Karyawan:", employee_names)
+    
+    with col2:
+        filter_date = st.date_input("Filter berdasarkan Tanggal:")
+    
+    # Tombol untuk melihat log
+    if st.button("Tampilkan Log Absensi"):
+        if selected_employee == "Semua Karyawan":
+            response = requests.get("http://127.0.0.1:5000/attendance-records")
+        else:
+            response = requests.get(f"http://127.0.0.1:5000/attendance-records/{selected_employee}")
+        
+        if response.status_code == 200:
+            attendance_data = response.json()
+            
+            if attendance_data:
+                # Filter berdasarkan tanggal jika dipilih
+                if filter_date:
+                    attendance_data = [
+                        record for record in attendance_data 
+                        if record['date'] == filter_date.strftime('%Y-%m-%d')
+                    ]
+                
+                if attendance_data:
+                    # Convert data to DataFrame
+                    df = pd.DataFrame(attendance_data)
+                    
+                    # Tambahkan kolom untuk foto
+                    if 'image_capture' in df.columns:
+                        # Fungsi untuk mengkonversi base64 ke HTML img
+                        def create_image_html(base64_str):
+                            if base64_str:
+                                return f'<img src="data:image/jpeg;base64,{base64_str}" style="width:100px;">'
+                            return ""
+                        
+                        df['Foto Absensi'] = df['image_capture'].apply(create_image_html)
+                        df = df.drop(columns=['image_capture'])
+                    
+                    # Rename columns for better display
+                    df = df.rename(columns={
+                        'employee_name': 'Nama Karyawan',
+                        'date': 'Tanggal',
+                        'time': 'Jam',
+                        'status': 'Status'
+                    })
+                    
+                    # Format tanggal dan waktu
+                    df['Tanggal'] = pd.to_datetime(df['Tanggal']).dt.strftime('%d-%m-%Y')
+                    
+                    # Sort by date and time
+                    df = df.sort_values(['Tanggal', 'Jam'], ascending=[False, False])
+                    
+                    # Display the table
+                    st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
+                    
+                    # Tambahkan statistik
+                    st.subheader("Statistik Absensi")
+                    if selected_employee == "Semua Karyawan":
+                        # Statistik per karyawan
+                        st.write("Jumlah Absensi per Karyawan:")
+                        attendance_count = df['Nama Karyawan'].value_counts()
+                        st.bar_chart(attendance_count)
+                    
+                    # Statistik per tanggal
+                    st.write("Jumlah Absensi per Tanggal:")
+                    date_count = df['Tanggal'].value_counts()
+                    st.line_chart(date_count)
+                    
+                else:
+                    st.info("Tidak ada data absensi untuk filter yang dipilih.")
+            else:
+                st.info("Belum ada data absensi.")
+        else:
+            st.error(f"Gagal mengambil data absensi: {response.text}")
+
+    # Tambahkan opsi ekspor data
+    if st.button("Ekspor Data ke CSV"):
+        if 'df' in locals():  # Check if DataFrame exists
+            # Convert DataFrame to CSV
+            csv = df.to_csv(index=False).encode('utf-8')
+            
+            # Download button
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name=f'absensi_{filter_date.strftime("%Y-%m-%d") if filter_date else "all"}.csv',
+                mime='text/csv',
+            )

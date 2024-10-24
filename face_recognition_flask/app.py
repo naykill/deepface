@@ -1,4 +1,4 @@
-# Server Side (Laptop 1) - app.py
+import sqlite3
 from flask import Flask, request, jsonify
 from flask_cors import CORS  # Add CORS support
 import sqlite3
@@ -7,6 +7,7 @@ import numpy as np
 import faiss
 import base64
 import cv2
+import json
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -28,6 +29,19 @@ def init_db():
                 embedding BLOB
             )
         ''')
+        
+        #new table for attendance
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS attendance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_name TEXT,
+                date DATE,
+                time TIME,
+                image_capture TEXT,
+                status TEXT
+            )
+        ''')
+        conn.commit()
 
         # New table for storing employee images and info
         cursor.execute('''
@@ -86,7 +100,7 @@ def register_employee():
     image_base64 = data['image']  # The base64 image data
 
     model_name = "Facenet"
-    detector_backend = "mtcnn"
+    detector_backend = "opencv"
 
     try:
         # Decode base64 image to process it with DeepFace
@@ -125,7 +139,7 @@ def identify_employee():
 
     image_base64 = data['image']
     model_name = "Facenet"
-    detector_backend = "mtcnn"
+    detector_backend = "opencv"
 
     try:
         # Decode base64 image
@@ -237,6 +251,116 @@ def get_employees_info():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
+#menambah endpoint absen
+@app.route('/record-attendance', methods=['POST'])
+def record_attendance():
+    data = request.json
+    employee_name = data['name']
+    image_capture = data['image']
+    status = data.get('status', 'masuk')  # default status adalah masuk
+    
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Dapatkan waktu saat ini
+            from datetime import datetime
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            current_time = datetime.now().strftime('%H:%M:%S')
+            
+            # Cek apakah sudah absen hari ini
+            cursor.execute("""
+                SELECT * FROM attendance 
+                WHERE employee_name = ? 
+                AND date = ? 
+                AND status = ?
+            """, (employee_name, current_date, status))
+            
+            existing_record = cursor.fetchone()
+            
+            if existing_record:
+                return jsonify({
+                    "message": f"Karyawan {employee_name} sudah melakukan absensi {status} hari ini"
+                }), 400
+            
+            # Catat absensi
+            cursor.execute("""
+                INSERT INTO attendance (employee_name, date, time, image_capture, status)
+                VALUES (?, ?, ?, ?, ?)
+            """, (employee_name, current_date, current_time, image_capture, status))
+            
+            conn.commit()
+            
+            return jsonify({
+                "message": f"Absensi {status} berhasil dicatat untuk {employee_name}",
+                "date": current_date,
+                "time": current_time
+            }), 200
+            
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+#mendapatkan data absensi
+@app.route('/attendance-records', methods=['GET'])
+def get_attendance_records():
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Ambil data absensi
+            cursor.execute("""
+                SELECT id, employee_name, date, time, status 
+                FROM attendance 
+                ORDER BY date DESC, time DESC
+            """)
+            
+            records = cursor.fetchall()
+            
+            attendance_list = []
+            for record in records:
+                attendance_list.append({
+                    'id': record[0],
+                    'employee_name': record[1],
+                    'date': record[2],
+                    'time': record[3],
+                    'status': record[4]
+                })
+            
+            return jsonify(attendance_list), 200
+            
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
+#endpoint data absen pe karyawan
+@app.route('/attendance-records/<employee_name>', methods=['GET'])
+def get_employee_attendance(employee_name):
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, date, time, status 
+                FROM attendance 
+                WHERE employee_name = ? 
+                ORDER BY date DESC, time DESC
+            """, (employee_name,))
+            
+            records = cursor.fetchall()
+            
+            attendance_list = []
+            for record in records:
+                attendance_list.append({
+                    'id': record[0],
+                    'date': record[1],
+                    'time': record[2],
+                    'status': record[3]
+                })
+            
+            return jsonify(attendance_list), 200
+            
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
 # Update employee in employee_info and employees table
 @app.route('/update-employee/<int:employee_id>', methods=['PUT'])
 def update_employee(employee_id):
@@ -291,6 +415,5 @@ def delete_employee(employee_id):
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    init_db()
-    # Change host to '0.0.0.0' to allow external access
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    init_db()  # Initialize the database
+    app.run(debug=True, host='127.0.0.1', port=5000)
