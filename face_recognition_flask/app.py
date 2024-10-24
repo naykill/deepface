@@ -1,5 +1,7 @@
 import sqlite3
 from flask import Flask, request, jsonify
+from flask_cors import CORS  # Add CORS support
+import sqlite3
 from deepface import DeepFace
 import numpy as np
 import faiss
@@ -8,6 +10,7 @@ import cv2
 import json
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Path to SQLite database
 db_path = './face_embeddings.db'
