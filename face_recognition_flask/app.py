@@ -415,5 +415,6 @@ def delete_employee(employee_id):
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    init_db()  # Initialize the database
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    init_db()
+    # Change host to '0.0.0.0' to allow external access
+    app.run(debug=False, host='0.0.0.0', port=5000)
