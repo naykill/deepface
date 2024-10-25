@@ -121,7 +121,7 @@ elif menu == "Data Karyawan":
 elif menu == "Edit/Hapus Karyawan":
     st.title("Edit atau Hapus Data Karyawan")
 
-    response = requests.get("http://127.0.0.1:5000/employees-full")
+    response = requests.get(f"{SERVER_URL}/employees-full")
     if response.status_code == 200:
         data = response.json()
         if data:
@@ -170,9 +170,9 @@ elif menu == "Log Absensi":
     # Tombol untuk melihat log
     if st.button("Tampilkan Log Absensi"):
         if selected_employee == "Semua Karyawan":
-            response = requests.get("http://127.0.0.1:5000/attendance-records")
+            response = requests.get(f"{SERVER_URL}/attendance-records")
         else:
-            response = requests.get(f"http://127.0.0.1:5000/attendance-records/{selected_employee}")
+            response = requests.get(f"{SERVER_URL}/attendance-records/{selected_employee}")
         
         if response.status_code == 200:
             attendance_data = response.json()

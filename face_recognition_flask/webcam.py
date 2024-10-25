@@ -67,7 +67,7 @@ while True:
                         if employee_name not in attendance_recorded:
                             # Catat absensi
                             attendance_response = requests.post(
-                                "http://127.0.0.1:5000/record-attendance",
+                                f"{SERVER_URL}/record-attendance",
                                 json={
                                     "name": employee_name,
                                     "image": image_base64,
