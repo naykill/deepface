@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 from io import BytesIO
+from datetime import datetime
 
 # Function to convert file image to base64
 def convert_image_to_base64(image):
@@ -157,7 +158,6 @@ elif menu == "Log Absensi":
     # Tambahkan filter
     col1, col2 = st.columns(2)
     with col1:
-        # Get all employees for filter
         emp_response = requests.get(f"{SERVER_URL}/employees-full")
         if emp_response.status_code == 200:
             employees = emp_response.json()
@@ -167,15 +167,19 @@ elif menu == "Log Absensi":
     with col2:
         filter_date = st.date_input("Filter berdasarkan Tanggal:")
     
-    # Tombol untuk melihat log
+    # Debug: Cek struktur data yang diterima
     if st.button("Tampilkan Log Absensi"):
         if selected_employee == "Semua Karyawan":
-            response = requests.get("http://127.0.0.1:5000/attendance-records")
+            response = requests.get(f"{SERVER_URL}/attendance-records")
         else:
-            response = requests.get(f"http://127.0.0.1:5000/attendance-records/{selected_employee}")
+            response = requests.get(f"{SERVER_URL}/attendance-records/{selected_employee}")
         
         if response.status_code == 200:
             attendance_data = response.json()
+            
+            # # Debug: Print sample data structure
+            # if attendance_data and len(attendance_data) > 0:
+            #     st.write("Sample data structure:", attendance_data[0])
             
             if attendance_data:
                 # Filter berdasarkan tanggal jika dipilih
@@ -186,49 +190,58 @@ elif menu == "Log Absensi":
                     ]
                 
                 if attendance_data:
-                    # Convert data to DataFrame
-                    df = pd.DataFrame(attendance_data)
+                    # Create a list to hold the rows of our table
+                    table_data = []
                     
-                    # Tambahkan kolom untuk foto
-                    if 'image_capture' in df.columns:
-                        # Fungsi untuk mengkonversi base64 ke HTML img
-                        def create_image_html(base64_str):
-                            if base64_str:
-                                return f'<img src="data:image/jpeg;base64,{base64_str}" style="width:100px;">'
-                            return ""
+                    for record in attendance_data:
+                        # Convert base64 image to displayable format
+                        if record.get('image_capture'):
+                            try:
+                                image_data = base64.b64decode(record['image_capture'])
+                                img = Image.open(BytesIO(image_data))
+                                
+                                # Resize image to make it smaller in the table
+                                img.thumbnail((100, 100))
+                                
+                                # Convert PIL Image to bytes
+                                buffered = BytesIO()
+                                img.save(buffered, format="PNG")
+                                img_str = base64.b64encode(buffered.getvalue()).decode()
+                                
+                                # Create HTML for the image
+                                img_html = f'<img src="data:image/png;base64,{img_str}" style="width:100px;">'
+                            except Exception as e:
+                                st.error(f"Error processing image: {e}")
+                                img_html = ""
+                        else:
+                            img_html = ""
                         
-                        df['Foto Absensi'] = df['image_capture'].apply(create_image_html)
-                        df = df.drop(columns=['image_capture'])
+                        # Format tanggal
+                        tanggal = datetime.strptime(record['date'], '%Y-%m-%d').strftime('%d-%m-%Y')
+                        
+                        # Add this record's data to our table - using get() to avoid KeyError
+                        table_data.append([
+                            record.get('name', record.get('employee_name', 'Unknown')),  # Try both possible keys
+                            tanggal,
+                            record.get('time', ''),
+                            record.get('status', ''),
+                            img_html
+                        ])
                     
-                    # Rename columns for better display
-                    df = df.rename(columns={
-                        'employee_name': 'Nama Karyawan',
-                        'date': 'Tanggal',
-                        'time': 'Jam',
-                        'status': 'Status'
-                    })
-                    
-                    # Format tanggal dan waktu
-                    df['Tanggal'] = pd.to_datetime(df['Tanggal']).dt.strftime('%d-%m-%Y')
+                    # Create DataFrame
+                    df = pd.DataFrame(table_data, columns=[
+                        "Nama Karyawan",
+                        "Tanggal",
+                        "Jam",
+                        "Status",
+                        "Foto Absensi"
+                    ])
                     
                     # Sort by date and time
                     df = df.sort_values(['Tanggal', 'Jam'], ascending=[False, False])
                     
                     # Display the table
                     st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
-                    
-                    # Tambahkan statistik
-                    st.subheader("Statistik Absensi")
-                    if selected_employee == "Semua Karyawan":
-                        # Statistik per karyawan
-                        st.write("Jumlah Absensi per Karyawan:")
-                        attendance_count = df['Nama Karyawan'].value_counts()
-                        st.bar_chart(attendance_count)
-                    
-                    # Statistik per tanggal
-                    st.write("Jumlah Absensi per Tanggal:")
-                    date_count = df['Tanggal'].value_counts()
-                    st.line_chart(date_count)
                     
                 else:
                     st.info("Tidak ada data absensi untuk filter yang dipilih.")
