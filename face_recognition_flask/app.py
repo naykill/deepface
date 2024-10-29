@@ -36,7 +36,9 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 employee_name TEXT,
                 date DATE,
-                time TIME,
+                jam_masuk TIME,
+                jam_keluar TIME,
+                jam_kerja TEXT,
                 image_capture TEXT,
                 status TEXT
             )
@@ -258,45 +260,66 @@ def record_attendance():
     employee_name = data['name']
     image_capture = data['image']
     status = data.get('status', 'masuk')  # default status adalah masuk
-    
+
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Dapatkan waktu saat ini
             from datetime import datetime
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M:%S')
-            
-            # Cek apakah sudah absen hari ini
+
+            # Cek apakah sudah absensi hari ini
             cursor.execute("""
                 SELECT * FROM attendance 
                 WHERE employee_name = ? 
                 AND date = ? 
                 AND status = ?
             """, (employee_name, current_date, status))
-            
+
             existing_record = cursor.fetchone()
-            
+
             if existing_record:
-                return jsonify({
-                    "message": f"Karyawan {employee_name} sudah melakukan absensi {status} hari ini"
-                }), 400
-            
+                if status == 'keluar':
+                    # Hitung jam kerja
+                    jam_masuk = datetime.strptime(existing_record[3], '%H:%M:%S')
+                    jam_keluar = datetime.strptime(current_time, '%H:%M:%S')
+                    jam_kerja = str(jam_keluar - jam_masuk)
+
+                    # Perbarui rekord dengan jam keluar dan jam kerja
+                    cursor.execute("""
+                        UPDATE attendance 
+                        SET jam_keluar = ?, jam_kerja = ?
+                        WHERE id = ?
+                    """, (current_time, jam_kerja, existing_record[0]))
+                    conn.commit()
+                    return jsonify({
+                        "message": f"Absensi {status} berhasil dicatat untuk {employee_name}",
+                        "date": current_date,
+                        "jam_masuk": existing_record[3],
+                        "jam_keluar": current_time,
+                        "jam_kerja": jam_kerja
+                    }), 200
+                else:
+                    return jsonify({
+                        "message": f"Karyawan {employee_name} sudah melakukan absensi {status} hari ini"
+                    }), 400
+
             # Catat absensi
             cursor.execute("""
-                INSERT INTO attendance (employee_name, date, time, image_capture, status)
+                INSERT INTO attendance (employee_name, date, jam_masuk, image_capture, status)
                 VALUES (?, ?, ?, ?, ?)
             """, (employee_name, current_date, current_time, image_capture, status))
-            
             conn.commit()
-            
+
             return jsonify({
                 "message": f"Absensi {status} berhasil dicatat untuk {employee_name}",
                 "date": current_date,
-                "time": current_time
+                "jam_masuk": current_time,
+                "status": status
             }), 200
-            
+
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
@@ -306,29 +329,31 @@ def get_attendance_records():
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Ambil data absensi
             cursor.execute("""
-                SELECT id, employee_name, date, time, status, image_capture
+                SELECT id, employee_name, date, jam_masuk, jam_keluar, jam_kerja, status, image_capture
                 FROM attendance 
-                ORDER BY date DESC, time DESC
+                ORDER BY date DESC, jam_masuk DESC
             """)
-            
+
             records = cursor.fetchall()
-            
+
             attendance_list = []
             for record in records:
                 attendance_list.append({
                     'id': record[0],
                     'employee_name': record[1],
                     'date': record[2],
-                    'time': record[3],
-                    'status': record[4],
-                    'image_capture': record[5]
+                    'jam_masuk': record[3],
+                    'jam_keluar': record[4],
+                    'jam_kerja': record[5],
+                    'status': record[6],
+                    'image_capture': record[7]
                 })
-            
+
             return jsonify(attendance_list), 200
-            
+
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
@@ -338,28 +363,30 @@ def get_employee_attendance(employee_name):
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
-                SELECT id, date, time, status, image_capture 
+                SELECT id, date, jam_masuk, jam_keluar, jam_kerja, status, image_capture 
                 FROM attendance 
                 WHERE employee_name = ? 
-                ORDER BY date DESC, time DESC
+                ORDER BY date DESC, jam_masuk DESC
             """, (employee_name,))
-            
+
             records = cursor.fetchall()
-            
+
             attendance_list = []
             for record in records:
                 attendance_list.append({
                     'id': record[0],
                     'date': record[1],
-                    'time': record[2],
-                    'status': record[3],
-                    'image_capture': record[4]
+                    'jam_masuk': record[2],
+                    'jam_keluar': record[3],
+                    'jam_kerja': record[4],
+                    'status': record[5],
+                    'image_capture': record[6]
                 })
-            
+
             return jsonify(attendance_list), 200
-            
+
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 

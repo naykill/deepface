@@ -1,3 +1,4 @@
+from deepface import DeepFace  # Import DeepFace directly
 import cv2
 import base64
 import requests
@@ -7,16 +8,22 @@ from datetime import datetime
 
 # Inisialisasi webcam
 cap = cv2.VideoCapture(1)  # Ganti dengan 1 jika menggunakan webcam eksternal
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap.set(cv2.CAP_PROP_FPS, 15)
+
 if not cap.isOpened():
     print("Error: Webcam tidak dapat dibuka. Pastikan kamera terhubung dan berfungsi.")
     exit()
 
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
 SERVER_URL = "http://172.254.2.153:5000"
 
-# Set interval pengambilan gambar (3 detik)
-capture_interval = 3
+# ESP32 URLs for controlling the gate
+ESP32_URL_OPEN = "http://172.254.2.78/open-gate"   # Replace with your ESP32 IP
+ESP32_URL_CLOSE = "http://172.254.2.78/close-gate" # Replace with your ESP32 IP
+
+# Set interval pengambilan gambar (5 detik)
+capture_interval = 5
 start_time = time.time()
 
 # Tambahkan variabel untuk tracking absensi
@@ -30,6 +37,14 @@ def reset_attendance_record():
         attendance_recorded.clear()
         current_date = new_date
 
+def detect_faces(frame):
+    # Deteksi wajah menggunakan DeepFace
+    faces = DeepFace.extract_faces(frame, detector_backend="opencv", enforce_detection=False)
+    face_coordinates = [(face['facial_area']['x'], face['facial_area']['y'], 
+                         face['facial_area']['w'], face['facial_area']['h']) 
+                        for face in faces]
+    return face_coordinates
+
 while True:
     reset_attendance_record()  # Reset data absensi jika hari berganti
     
@@ -39,9 +54,8 @@ while True:
         print("Error: Tidak dapat membaca dari webcam.")
         break
 
-    # Deteksi wajah
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray_frame, 1.3, 5)
+    # Deteksi wajah menggunakan MTCNN
+    faces = detect_faces(frame)
 
     # Jika wajah terdeteksi, capture wajah
     if len(faces) > 0:
@@ -85,12 +99,29 @@ while True:
                                 print(f"Gagal mencatat absensi: {attendance_response.json()['message']}")
                         
                         print(f"Selamat datang {data['name']} - {data['position']}")
+
+                        # Send request to ESP32 to open the gate
+                        try:
+                            esp_response = requests.get(ESP32_URL_OPEN)
+                            if esp_response.status_code == 200:
+                                print("Gate opened successfully!")
+                        except requests.exceptions.RequestException as e:
+                            print(f"Error connecting to ESP32: {e}")
                     else:
                         print(f"Error: {response.json().get('message', 'Unknown error')}")
                 except requests.exceptions.RequestException as e:
                     print(f"Error connecting to server: {e}")
 
             start_time = current_time
+
+    else:
+        # If no face is detected, send request to close the gate
+        try:
+            esp_response = requests.get(ESP32_URL_CLOSE)
+            if esp_response.status_code == 200:
+                print("Gate closed successfully!")
+        except requests.exceptions.RequestException as e:
+            print(f"Error connecting to ESP32: {e}")
 
     # Tampilkan frame webcam dengan kotak di sekitar wajah
     for (x, y, w, h) in faces:
