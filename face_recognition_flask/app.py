@@ -309,7 +309,7 @@ def get_attendance_records():
             
             # Ambil data absensi
             cursor.execute("""
-                SELECT id, employee_name, date, time, status 
+                SELECT id, employee_name, date, time, status, image_capture
                 FROM attendance 
                 ORDER BY date DESC, time DESC
             """)
@@ -323,7 +323,8 @@ def get_attendance_records():
                     'employee_name': record[1],
                     'date': record[2],
                     'time': record[3],
-                    'status': record[4]
+                    'status': record[4],
+                    'image_capture': record[5]
                 })
             
             return jsonify(attendance_list), 200
@@ -339,7 +340,7 @@ def get_employee_attendance(employee_name):
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT id, date, time, status 
+                SELECT id, date, time, status, image_capture 
                 FROM attendance 
                 WHERE employee_name = ? 
                 ORDER BY date DESC, time DESC
@@ -353,7 +354,8 @@ def get_employee_attendance(employee_name):
                     'id': record[0],
                     'date': record[1],
                     'time': record[2],
-                    'status': record[3]
+                    'status': record[3],
+                    'image_capture': record[4]
                 })
             
             return jsonify(attendance_list), 200
