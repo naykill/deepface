@@ -9,6 +9,8 @@ import base64
 import cv2
 import json
 from datetime import datetime
+from sklearn.neighbors import NearestNeighbors
+from scipy.spatial.distance import cosine
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -95,6 +97,58 @@ def fetch_embeddings():
 def convert_embedding(blob):
     return np.frombuffer(blob, dtype='f')
 
+class EnhancedFaceRecognition:
+    def __init__(self, threshold=0.6):
+        self.threshold = threshold
+        self.index = None
+        self.employee_details = []
+    
+    def build_index(self, embeddings, details):
+        """Build FAISS index with embeddings"""
+        self.embeddings = np.array(embeddings, dtype='float32')
+        self.employee_details = details
+        
+        # Initialize FAISS index
+        num_dimensions = self.embeddings.shape[1]
+        self.index = faiss.IndexFlatL2(num_dimensions)
+        self.index.add(self.embeddings)
+        
+        # Initialize sklearn NearestNeighbors for cosine similarity
+        self.nn = NearestNeighbors(n_neighbors=1, metric='cosine')
+        self.nn.fit(self.embeddings)
+    
+    def identify(self, target_embedding):
+        """
+        Identify a person using multiple similarity metrics and threshold
+        Returns: (name, position, confidence) or ("Unknown", None, None)
+        """
+        target_embedding = np.array([target_embedding], dtype='float32')
+        
+        # Get L2 distance using FAISS
+        distances, indices = self.index.search(target_embedding, 1)
+        l2_distance = distances[0][0]
+        
+        # Get cosine similarity using sklearn
+        distances_cosine, indices_cosine = self.nn.kneighbors(target_embedding)
+        cosine_distance = distances_cosine[0][0]
+        
+        # Calculate normalized score (0-1, higher is better)
+        l2_score = 1 / (1 + l2_distance)
+        cosine_score = 1 - cosine_distance
+        
+        # Combined confidence score
+        confidence = (l2_score + cosine_score) / 2
+        
+        # If confidence is below threshold, return Unknown
+        if confidence < self.threshold:
+            return "Unknown", None, confidence
+            
+        # Get matching employee details
+        match_idx = indices[0][0]
+        name, position = self.employee_details[match_idx]
+        
+        return name, position, confidence
+
 @app.route('/register-employee', methods=['POST'])
 def register_employee():
     data = request.json
@@ -140,12 +194,9 @@ def identify_employee():
     if not data or 'image' not in data:
         return jsonify({"message": "No image data provided"}), 400
 
-    image_base64 = data['image']
-    model_name = "Facenet"
-    detector_backend = "opencv"
-
     try:
-        # Decode base64 image
+        # Decode and get embedding as before
+        image_base64 = data['image']
         image_bytes = base64.b64decode(image_base64)
         img_array = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
@@ -153,46 +204,41 @@ def identify_employee():
         if img is None:
             return jsonify({"message": "Failed to decode image"}), 400
 
-        # Generate embedding
         target_embedding = DeepFace.represent(
             img_path=img,
-            model_name=model_name,
-            detector_backend=detector_backend,
+            model_name="Facenet",
+            detector_backend="opencv",
             enforce_detection=False
         )[0]["embedding"]
 
-        target_embedding = np.array(target_embedding, dtype='f')
-
-        # Fetch all embeddings from the database
+        # Fetch embeddings and create recognition system
         employees_data = fetch_embeddings()
-
-        # Extract embeddings and store them in a numpy array
         embeddings = []
         employee_details = []
+        
         for emp in employees_data:
-            name, position, embedding_blob = emp['name'], emp['position'], emp['embedding']
-            embedding = np.frombuffer(base64.b64decode(embedding_blob), dtype='f')
+            embedding = np.frombuffer(base64.b64decode(emp['embedding']), dtype='f')
             embeddings.append(embedding)
-            employee_details.append((name, position))
+            employee_details.append((emp['name'], emp['position']))
 
-        embeddings = np.array(embeddings, dtype='f')
+        # Initialize and use enhanced recognition
+        recognition = EnhancedFaceRecognition(threshold=0.2)  # Adjust threshold as needed
+        recognition.build_index(embeddings, employee_details)
+        
+        name, position, confidence = recognition.identify(target_embedding)
+        
+        if name == "Unknown":
+            return jsonify({
+                "message": "Person not recognized",
+                "confidence": float(confidence)
+            }), 404
+            
+        return jsonify({
+            "name": name,
+            "position": position,
+            "confidence": float(confidence)
+        }), 200
 
-        # Initialize FAISS index and search for the closest match
-        num_dimensions = embeddings.shape[1]
-        index = faiss.IndexFlatL2(num_dimensions)
-        index.add(embeddings)
-        k = 1  # Find the closest match
-        distances, neighbours = index.search(np.array([target_embedding]), k)
-
-        if len(neighbours) > 0 and neighbours[0][0] < len(employee_details):
-            match_name, position = employee_details[neighbours[0][0]]
-            return jsonify({"name": match_name, "position": position}), 200
-
-        return jsonify({"message": "Tidak ada kecocokan ditemukan."}), 404
-
-    except ValueError as ve:
-        print(f"ValueError during identification: {str(ve)}")
-        return jsonify({"message": f"ValueError: {str(ve)}"}), 400
     except Exception as e:
         print(f"Error during identification: {str(e)}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
