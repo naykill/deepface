@@ -19,7 +19,7 @@ SERVER_URL = "http://172.254.2.153:5000"
 ESP32_URL_OPEN = "http://172.254.2.78/open-gate"   # Replace with your ESP32 IP for opening the gate
 ESP32_URL_CLOSE = "http://172.254.2.78/close-gate" # Replace with your ESP32 IP for closing the gate
 
-# Set interval pengambilan gambar (3 detik)
+# Set interval pengambilan gambar (5 detik)
 capture_interval = 5
 start_time = time.time()
 
@@ -84,12 +84,12 @@ while True:
                             
                             if attendance_response.status_code == 200:
                                 attendance_data = attendance_response.json()
-                                print(f"Absensi berhasil: {employee_name}")
+                                print(f"Presensi berhasil: {employee_name}")
                                 print(f"Tanggal: {attendance_data['date']}")
                                 print(f"Jam: {attendance_data['time']}")
                                 attendance_recorded.add(employee_name)
                             else:
-                                print(f"Gagal mencatat absensi: {attendance_response.json()['message']}")
+                                print(f"Gagal mencatat presensi: {attendance_response.json()['message']}")
                         
                         print(f"Selamat datang {data['name']} - {data['position']}")
 

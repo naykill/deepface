@@ -24,7 +24,7 @@ positions = [
 
 # Sidebar with menu options
 st.sidebar.title("Menu")
-menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "Data Karyawan", "Edit/Hapus Karyawan","Log Absensi"])
+menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "Data Karyawan", "Edit/Hapus Karyawan","Log Attendance"])
 
 # Function to crop face from the image
 def crop_face(image):
@@ -152,8 +152,8 @@ elif menu == "Edit/Hapus Karyawan":
                     st.error(f"Error: {response.text}")
 
 #menu log
-elif menu == "Log Absensi":
-    st.title("Log Absensi Karyawan")
+elif menu == "Log Attendance":
+    st.title("Log Attendance Karyawan")
     
     # Tambahkan filter
     col1, col2 = st.columns(2)
@@ -168,7 +168,7 @@ elif menu == "Log Absensi":
         filter_date = st.date_input("Filter berdasarkan Tanggal:")
     
     # Debug: Cek struktur data yang diterima
-    if st.button("Tampilkan Log Absensi"):
+    if st.button("Tampilkan Log Attendance"):
         if selected_employee == "Semua Karyawan":
             response = requests.get(f"{SERVER_URL}/attendance-records")
         else:
@@ -234,7 +234,7 @@ elif menu == "Log Absensi":
                         "Tanggal",
                         "Jam",
                         "Status",
-                        "Foto Absensi"
+                        "Foto Presensi"
                     ])
                     
                     # Sort by date and time
@@ -244,11 +244,11 @@ elif menu == "Log Absensi":
                     st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
                     
                 else:
-                    st.info("Tidak ada data absensi untuk filter yang dipilih.")
+                    st.info("Tidak ada data presensi untuk filter yang dipilih.")
             else:
-                st.info("Belum ada data absensi.")
+                st.info("Belum ada data presensi.")
         else:
-            st.error(f"Gagal mengambil data absensi: {response.text}")
+            st.error(f"Gagal mengambil data presensi: {response.text}")
 
     # Tambahkan opsi ekspor data
     if st.button("Ekspor Data ke CSV"):

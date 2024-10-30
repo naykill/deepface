@@ -222,7 +222,7 @@ def identify_employee():
             employee_details.append((emp['name'], emp['position']))
 
         # Initialize and use enhanced recognition
-        recognition = EnhancedFaceRecognition(threshold=0.2)  # Adjust threshold as needed
+        recognition = EnhancedFaceRecognition(threshold=0.3)  # Adjust threshold as needed
         recognition.build_index(embeddings, employee_details)
         
         name, position, confidence = recognition.identify(target_embedding)
@@ -300,7 +300,7 @@ def get_employees_info():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-#menambah endpoint absen
+#menambah endpoint attendance
 @app.route('/record-attendance', methods=['POST'])
 def record_attendance():
     data = request.json
@@ -315,7 +315,7 @@ def record_attendance():
             current_time = datetime.now().strftime('%H:%M:%S')
 
             if status == 'masuk':
-                # Cek apakah sudah absen masuk hari ini
+                # Cek apakah sudah masuk hari ini
                 cursor.execute("""
                     SELECT * FROM attendance 
                     WHERE employee_name = ? 
@@ -325,10 +325,10 @@ def record_attendance():
                 
                 if cursor.fetchone():
                     return jsonify({
-                        "message": f"Karyawan {employee_name} sudah melakukan absensi masuk hari ini"
+                        "message": f"Karyawan {employee_name} sudah melakukan presensi masuk hari ini"
                     }), 400
                 
-                # Catat absen masuk baru
+                # Catat attendance baru
                 cursor.execute("""
                     INSERT INTO attendance (
                         employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
@@ -338,7 +338,7 @@ def record_attendance():
                 """, (employee_name, current_date, current_time, image_capture, status))
 
             elif status == 'keluar':
-                # Cek record absen masuk hari ini
+                # Cek record attendance hari ini
                 cursor.execute("""
                     SELECT id, jam_masuk 
                     FROM attendance 
@@ -352,7 +352,7 @@ def record_attendance():
                 
                 if not masuk_record:
                     return jsonify({
-                        "message": f"Tidak ditemukan absen masuk untuk {employee_name} hari ini"
+                        "message": f"Tidak ditemukan masuk atas nama {employee_name} hari ini"
                     }), 400
                 
                 # Hitung jam kerja
@@ -372,7 +372,7 @@ def record_attendance():
 
             conn.commit()
             return jsonify({
-                "message": f"Absensi {status} berhasil dicatat untuk {employee_name}",
+                "message": f"Presensi {status} berhasil dicatat untuk {employee_name}",
                 "date": current_date,
                 "time": current_time,
                 "status": status
@@ -381,14 +381,14 @@ def record_attendance():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-#mendapatkan data absensi
+#mendapatkan data presensi
 @app.route('/attendance-records', methods=['GET'])
 def get_attendance_records():
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
 
-            # Ambil data absensi
+            # Ambil data presensi
             cursor.execute("""
                 SELECT id, employee_name, date, jam_masuk, jam_keluar, jam_kerja, status, image_capture
                 FROM attendance 
@@ -415,7 +415,7 @@ def get_attendance_records():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-#endpoint data absen pe karyawan
+#endpoint data presensi per karyawan
 @app.route('/attendance-records/<employee_name>', methods=['GET'])
 def get_employee_attendance(employee_name):
     try:
