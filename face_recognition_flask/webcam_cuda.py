@@ -23,11 +23,11 @@ class FaceDetectionSystem:
         self.DETECTION_SCALE = 0.5  # Scale down factor for face detection
         
         # Initialize camera with RTSP
-        self.cap = cv2.VideoCapture("rtsp://username:password@camera_ip:554/stream")
+        self.cap = cv2.VideoCapture("http://172.254.0.124:2000/video")
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize frame buffer
         
         # Initialize face detector
-        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        self.face_cascade = cv2.cuda.CascadeClassifier_create(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         
         # State variables
         self.attendance_recorded = set()
