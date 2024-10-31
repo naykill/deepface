@@ -223,7 +223,9 @@ elif menu == "Log Absensi":
                         table_data.append([
                             record.get('name', record.get('employee_name', 'Unknown')),  # Try both possible keys
                             tanggal,
-                            record.get('time', ''),
+                            record.get('jam_masuk', ''),
+                            record.get('jam_keluar', ''),
+                            record.get('jam_kerja', ''),
                             record.get('status', ''),
                             img_html
                         ])
@@ -232,13 +234,15 @@ elif menu == "Log Absensi":
                     df = pd.DataFrame(table_data, columns=[
                         "Nama Karyawan",
                         "Tanggal",
-                        "Jam",
+                        "Jam Masuk",
+                        "Jam Keluar",
+                        "Jam Kerja",
                         "Status",
                         "Foto Absensi"
                     ])
                     
                     # Sort by date and time
-                    df = df.sort_values(['Tanggal', 'Jam'], ascending=[False, False])
+                    df = df.sort_values(['Tanggal', 'Jam Masuk', 'Jam Keluar', 'Jam Kerja'], ascending=[False, False])
                     
                     # Display the table
                     st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)

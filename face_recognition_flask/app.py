@@ -8,6 +8,9 @@ import faiss
 import base64
 import cv2
 import json
+from datetime import datetime
+from sklearn.neighbors import NearestNeighbors
+from scipy.spatial.distance import cosine
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -34,13 +37,13 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS attendance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_name TEXT,
-                date DATE,
+                employee_name TEXT NOT NULL,
+                date DATE NOT NULL,
                 jam_masuk TIME,
-                jam_keluar TIME,
-                jam_kerja TEXT,
+                jam_keluar TIME DEFAULT NULL,
+                jam_kerja TEXT DEFAULT NULL,
                 image_capture TEXT,
-                status TEXT
+                status TEXT NOT NULL
             )
         ''')
         conn.commit()
@@ -94,6 +97,58 @@ def fetch_embeddings():
 def convert_embedding(blob):
     return np.frombuffer(blob, dtype='f')
 
+class EnhancedFaceRecognition:
+    def __init__(self, threshold=0.6):
+        self.threshold = threshold
+        self.index = None
+        self.employee_details = []
+    
+    def build_index(self, embeddings, details):
+        """Build FAISS index with embeddings"""
+        self.embeddings = np.array(embeddings, dtype='float32')
+        self.employee_details = details
+        
+        # Initialize FAISS index
+        num_dimensions = self.embeddings.shape[1]
+        self.index = faiss.IndexFlatL2(num_dimensions)
+        self.index.add(self.embeddings)
+        
+        # Initialize sklearn NearestNeighbors for cosine similarity
+        self.nn = NearestNeighbors(n_neighbors=1, metric='cosine')
+        self.nn.fit(self.embeddings)
+    
+    def identify(self, target_embedding):
+        """
+        Identify a person using multiple similarity metrics and threshold
+        Returns: (name, position, confidence) or ("Unknown", None, None)
+        """
+        target_embedding = np.array([target_embedding], dtype='float32')
+        
+        # Get L2 distance using FAISS
+        distances, indices = self.index.search(target_embedding, 1)
+        l2_distance = distances[0][0]
+        
+        # Get cosine similarity using sklearn
+        distances_cosine, indices_cosine = self.nn.kneighbors(target_embedding)
+        cosine_distance = distances_cosine[0][0]
+        
+        # Calculate normalized score (0-1, higher is better)
+        l2_score = 1 / (1 + l2_distance)
+        cosine_score = 1 - cosine_distance
+        
+        # Combined confidence score
+        confidence = (l2_score + cosine_score) / 2
+        
+        # If confidence is below threshold, return Unknown
+        if confidence < self.threshold:
+            return "Unknown", None, confidence
+            
+        # Get matching employee details
+        match_idx = indices[0][0]
+        name, position = self.employee_details[match_idx]
+        
+        return name, position, confidence
+
 @app.route('/register-employee', methods=['POST'])
 def register_employee():
     data = request.json
@@ -139,12 +194,9 @@ def identify_employee():
     if not data or 'image' not in data:
         return jsonify({"message": "No image data provided"}), 400
 
-    image_base64 = data['image']
-    model_name = "Facenet"
-    detector_backend = "opencv"
-
     try:
-        # Decode base64 image
+        # Decode and get embedding as before
+        image_base64 = data['image']
         image_bytes = base64.b64decode(image_base64)
         img_array = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
@@ -152,46 +204,41 @@ def identify_employee():
         if img is None:
             return jsonify({"message": "Failed to decode image"}), 400
 
-        # Generate embedding
         target_embedding = DeepFace.represent(
             img_path=img,
-            model_name=model_name,
-            detector_backend=detector_backend,
+            model_name="Facenet",
+            detector_backend="opencv",
             enforce_detection=False
         )[0]["embedding"]
 
-        target_embedding = np.array(target_embedding, dtype='f')
-
-        # Fetch all embeddings from the database
+        # Fetch embeddings and create recognition system
         employees_data = fetch_embeddings()
-
-        # Extract embeddings and store them in a numpy array
         embeddings = []
         employee_details = []
+        
         for emp in employees_data:
-            name, position, embedding_blob = emp['name'], emp['position'], emp['embedding']
-            embedding = np.frombuffer(base64.b64decode(embedding_blob), dtype='f')
+            embedding = np.frombuffer(base64.b64decode(emp['embedding']), dtype='f')
             embeddings.append(embedding)
-            employee_details.append((name, position))
+            employee_details.append((emp['name'], emp['position']))
 
-        embeddings = np.array(embeddings, dtype='f')
+        # Initialize and use enhanced recognition
+        recognition = EnhancedFaceRecognition(threshold=0.3)  # Adjust threshold as needed
+        recognition.build_index(embeddings, employee_details)
+        
+        name, position, confidence = recognition.identify(target_embedding)
+        
+        if name == "Unknown":
+            return jsonify({
+                "message": "Person not recognized",
+                "confidence": float(confidence)
+            }), 404
+            
+        return jsonify({
+            "name": name,
+            "position": position,
+            "confidence": float(confidence)
+        }), 200
 
-        # Initialize FAISS index and search for the closest match
-        num_dimensions = embeddings.shape[1]
-        index = faiss.IndexFlatL2(num_dimensions)
-        index.add(embeddings)
-        k = 1  # Find the closest match
-        distances, neighbours = index.search(np.array([target_embedding]), k)
-
-        if len(neighbours) > 0 and neighbours[0][0] < len(employee_details):
-            match_name, position = employee_details[neighbours[0][0]]
-            return jsonify({"name": match_name, "position": position}), 200
-
-        return jsonify({"message": "Tidak ada kecocokan ditemukan."}), 404
-
-    except ValueError as ve:
-        print(f"ValueError during identification: {str(ve)}")
-        return jsonify({"message": f"ValueError: {str(ve)}"}), 400
     except Exception as e:
         print(f"Error during identification: {str(e)}")
         return jsonify({"message": f"Error: {str(e)}"}), 500
@@ -253,7 +300,7 @@ def get_employees_info():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-#menambah endpoint absen
+#menambah endpoint attendance
 @app.route('/record-attendance', methods=['POST'])
 def record_attendance():
     data = request.json
@@ -264,73 +311,84 @@ def record_attendance():
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-
-            # Dapatkan waktu saat ini
-            from datetime import datetime
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M:%S')
 
-            # Cek apakah sudah absensi hari ini
-            cursor.execute("""
-                SELECT * FROM attendance 
-                WHERE employee_name = ? 
-                AND date = ? 
-                AND status = ?
-            """, (employee_name, current_date, status))
-
-            existing_record = cursor.fetchone()
-
-            if existing_record:
-                if status == 'keluar':
-                    # Hitung jam kerja
-                    jam_masuk = datetime.strptime(existing_record[3], '%H:%M:%S')
-                    jam_keluar = datetime.strptime(current_time, '%H:%M:%S')
-                    jam_kerja = str(jam_keluar - jam_masuk)
-
-                    # Perbarui rekord dengan jam keluar dan jam kerja
-                    cursor.execute("""
-                        UPDATE attendance 
-                        SET jam_keluar = ?, jam_kerja = ?
-                        WHERE id = ?
-                    """, (current_time, jam_kerja, existing_record[0]))
-                    conn.commit()
+            if status == 'masuk':
+                # Cek apakah sudah masuk hari ini
+                cursor.execute("""
+                    SELECT * FROM attendance 
+                    WHERE employee_name = ? 
+                    AND date = ? 
+                    AND status = 'masuk'
+                """, (employee_name, current_date))
+                
+                if cursor.fetchone():
                     return jsonify({
-                        "message": f"Absensi {status} berhasil dicatat untuk {employee_name}",
-                        "date": current_date,
-                        "jam_masuk": existing_record[3],
-                        "jam_keluar": current_time,
-                        "jam_kerja": jam_kerja
-                    }), 200
-                else:
-                    return jsonify({
-                        "message": f"Karyawan {employee_name} sudah melakukan absensi {status} hari ini"
+                        "message": f"Karyawan {employee_name} sudah melakukan presensi masuk hari ini"
                     }), 400
+                
+                # Catat attendance baru
+                cursor.execute("""
+                    INSERT INTO attendance (
+                        employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
+                        image_capture, status
+                    )
+                    VALUES (?, ?, ?, NULL, NULL, ?, ?)
+                """, (employee_name, current_date, current_time, image_capture, status))
 
-            # Catat absensi
-            cursor.execute("""
-                INSERT INTO attendance (employee_name, date, jam_masuk, image_capture, status)
-                VALUES (?, ?, ?, ?, ?)
-            """, (employee_name, current_date, current_time, image_capture, status))
+            elif status == 'keluar':
+                # Cek record attendance hari ini
+                cursor.execute("""
+                    SELECT id, jam_masuk 
+                    FROM attendance 
+                    WHERE employee_name = ? 
+                    AND date = ? 
+                    AND status = 'masuk'
+                    AND jam_keluar IS NULL
+                """, (employee_name, current_date))
+                
+                masuk_record = cursor.fetchone()
+                
+                if not masuk_record:
+                    return jsonify({
+                        "message": f"Tidak ditemukan masuk atas nama {employee_name} hari ini"
+                    }), 400
+                
+                # Hitung jam kerja
+                record_id, jam_masuk = masuk_record
+                jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
+                jam_keluar_time = datetime.strptime(current_time, '%H:%M:%S')
+                jam_kerja = str(jam_keluar_time - jam_masuk_time)
+
+                # Update record dengan jam keluar dan jam kerja
+                cursor.execute("""
+                    UPDATE attendance 
+                    SET jam_keluar = ?, 
+                        jam_kerja = ?,
+                        status = 'selesai'
+                    WHERE id = ?
+                """, (current_time, jam_kerja, record_id))
+
             conn.commit()
-
             return jsonify({
-                "message": f"Absensi {status} berhasil dicatat untuk {employee_name}",
+                "message": f"Presensi {status} berhasil dicatat untuk {employee_name}",
                 "date": current_date,
-                "jam_masuk": current_time,
+                "time": current_time,
                 "status": status
             }), 200
 
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-#mendapatkan data absensi
+#mendapatkan data presensi
 @app.route('/attendance-records', methods=['GET'])
 def get_attendance_records():
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
 
-            # Ambil data absensi
+            # Ambil data presensi
             cursor.execute("""
                 SELECT id, employee_name, date, jam_masuk, jam_keluar, jam_kerja, status, image_capture
                 FROM attendance 
@@ -357,7 +415,7 @@ def get_attendance_records():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-#endpoint data absen pe karyawan
+#endpoint data presensi per karyawan
 @app.route('/attendance-records/<employee_name>', methods=['GET'])
 def get_employee_attendance(employee_name):
     try:
@@ -445,4 +503,4 @@ def delete_employee(employee_id):
 
 if __name__ == '__main__':
     init_db()  # Initialize the database
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
