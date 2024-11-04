@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class FaceDetectionSystem:
     def __init__(self):
         # Configuration
-        self.SERVER_URL = "http://172.254.2.153:5000"
+        self.SERVER_URL = "http://172.254.3.21:5000"
         self.MQTT_BROKER = "172.254.2.153"  # Jetson Nano's IP
         self.MQTT_PORT = 1883
         self.MQTT_TOPIC_OPEN = "gate/open"
@@ -26,7 +26,7 @@ class FaceDetectionSystem:
         self.DETECTION_SCALE = 0.5  # Scale down factor for face detection
         
         # Initialize camera with RTSP
-        self.cap = cv2.VideoCapture("http://172.254.0.124:2000/video")
+        self.cap = cv2.VideoCapture("http://172.254.1.122:4747/video")
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize frame buffer
         
         # Initialize face detector

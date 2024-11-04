@@ -8,7 +8,7 @@ import faiss
 import base64
 import cv2
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cosine
 
@@ -98,7 +98,7 @@ def convert_embedding(blob):
     return np.frombuffer(blob, dtype='f')
 
 class EnhancedFaceRecognition:
-    def __init__(self, threshold=0.6):
+    def __init__(self, threshold=0.3):
         self.threshold = threshold
         self.index = None
         self.employee_details = []
@@ -300,22 +300,50 @@ def get_employees_info():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
+#menambah get time period
+def get_time_period():
+    """Return the time period based on current hour"""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "pagi"
+    elif 12 <= hour < 15:
+        return "siang"
+    elif 15 <= hour < 18:
+        return "sore"
+    else:
+        return "malam"
+
+def is_late_arrival():
+    """Check if current time is past the maximum arrival time (11:00)"""
+    max_arrival_time = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
+    return datetime.now() > max_arrival_time
+
+def calculate_working_hours(jam_masuk):
+    """Calculate working hours between check-in and current time"""
+    jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
+    current_time = datetime.now().time()
+    current_time_full = datetime.strptime(current_time.strftime('%H:%M:%S'), '%H:%M:%S')
+    
+    time_diff = current_time_full - jam_masuk_time
+    return time_diff
+
 #menambah endpoint attendance
 @app.route('/record-attendance', methods=['POST'])
 def record_attendance():
     data = request.json
     employee_name = data['name']
     image_capture = data['image']
-    status = data.get('status', 'masuk')  # default status adalah masuk
+    status = data.get('status', 'masuk')
 
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M:%S')
+            time_period = get_time_period()
 
             if status == 'masuk':
-                # Cek apakah sudah masuk hari ini
+                # Check if already checked in today
                 cursor.execute("""
                     SELECT * FROM attendance 
                     WHERE employee_name = ? 
@@ -327,8 +355,16 @@ def record_attendance():
                     return jsonify({
                         "message": f"Karyawan {employee_name} sudah melakukan presensi masuk hari ini"
                     }), 400
+
+                # Check if arrival is late
+                if is_late_arrival():
+                    return jsonify({
+                        "message": f"Karyawan {employee_name} terlambat. Batas waktu masuk adalah jam 11:00",
+                        "status": "terlambat",
+                        "time_period": time_period
+                    }), 400
                 
-                # Catat attendance baru
+                # Record new attendance
                 cursor.execute("""
                     INSERT INTO attendance (
                         employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
@@ -338,7 +374,7 @@ def record_attendance():
                 """, (employee_name, current_date, current_time, image_capture, status))
 
             elif status == 'keluar':
-                # Cek record attendance hari ini
+                # Check today's attendance record
                 cursor.execute("""
                     SELECT id, jam_masuk 
                     FROM attendance 
@@ -355,13 +391,22 @@ def record_attendance():
                         "message": f"Tidak ditemukan masuk atas nama {employee_name} hari ini"
                     }), 400
                 
-                # Hitung jam kerja
                 record_id, jam_masuk = masuk_record
+                
+                # Check minimum working hours (1 hour)
+                working_hours = calculate_working_hours(jam_masuk)
+                if working_hours < timedelta(hours=1):
+                    return jsonify({
+                        "message": f"Belum mencapai minimal waktu kerja (1 jam). Waktu kerja saat ini: {working_hours}",
+                        "status": "minimum_not_met",
+                        "time_period": time_period
+                    }), 400
+
+                # Update record with check-out time and working hours
                 jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
                 jam_keluar_time = datetime.strptime(current_time, '%H:%M:%S')
                 jam_kerja = str(jam_keluar_time - jam_masuk_time)
 
-                # Update record dengan jam keluar dan jam kerja
                 cursor.execute("""
                     UPDATE attendance 
                     SET jam_keluar = ?, 
@@ -375,6 +420,7 @@ def record_attendance():
                 "message": f"Presensi {status} berhasil dicatat untuk {employee_name}",
                 "date": current_date,
                 "time": current_time,
+                "time_period": time_period,
                 "status": status
             }), 200
 

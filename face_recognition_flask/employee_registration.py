@@ -13,7 +13,7 @@ from datetime import datetime
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
-SERVER_URL = "http://172.254.2.153:5000"
+SERVER_URL = "http://172.254.3.21:5000"
 
 # List of positions available
 positions = [
@@ -122,7 +122,7 @@ elif menu == "Data Karyawan":
 elif menu == "Edit/Hapus Karyawan":
     st.title("Edit atau Hapus Data Karyawan")
 
-    response = requests.get("http://127.0.0.1:5000/employees-full")
+    response = requests.get(f"{SERVER_URL}/employees-full")
     if response.status_code == 200:
         data = response.json()
         if data:
@@ -223,7 +223,9 @@ elif menu == "Log Attendance":
                         table_data.append([
                             record.get('name', record.get('employee_name', 'Unknown')),  # Try both possible keys
                             tanggal,
-                            record.get('time', ''),
+                            record.get('jam_masuk', ''),
+                            record.get('jam_keluar', ''),
+                            record.get('jam_kerja', ''),
                             record.get('status', ''),
                             img_html
                         ])
@@ -232,13 +234,15 @@ elif menu == "Log Attendance":
                     df = pd.DataFrame(table_data, columns=[
                         "Nama Karyawan",
                         "Tanggal",
-                        "Jam",
-                        "Status",
-                        "Foto Presensi"
-                    ])
+                        "jam_masuk",
+                        "jam_keluar",
+                        "jam_kerja",
+                        "status",
+                        "image_capture"
+                        ])
                     
                     # Sort by date and time
-                    df = df.sort_values(['Tanggal', 'Jam'], ascending=[False, False])
+                    # df = df.sort_values(['Tanggal', 'Jam'], ascending=[False, False])
                     
                     # Display the table
                     st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
