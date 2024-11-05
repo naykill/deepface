@@ -6,10 +6,17 @@ import time
 import logging
 from datetime import datetime
 import timedelta
+from gtts import gTTS
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def speak_text(text):
+    tts = gTTS(text=text, lang='id')
+    tts.save("greeting.mp3")
+    os.system("mpg321 greeting.mp3")
 
 class FaceDetectionSystem:
     def __init__(self):
@@ -23,7 +30,7 @@ class FaceDetectionSystem:
         self.last_unknown_detection = 0
 
         # Initialize camera
-        self.cap = cv2.VideoCapture(0)  # Default camera
+        self.cap = cv2.VideoCapture('http://172.254.0.124:2000/video')  # Default camera
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
         # State variables
@@ -31,6 +38,7 @@ class FaceDetectionSystem:
         self.last_capture_time = time.time()
         self.frame_count = 0
     
+
     def _handle_face_recognition(self, face_data):
         try:
             response = requests.post(
@@ -44,24 +52,22 @@ class FaceDetectionSystem:
                 data = response.json()
                 employee_name = data['name']
                 confidence = data.get('confidence', 0)
+                time_period = data.get('time_period', '')
+
+                greeting = f"Selamat {time_period}"
                 
-                current_time = time.time()
-                
-                # Handle Unknown Person differently
                 if employee_name == "Unknown Person":
-                    # Check if enough time has passed since last unknown detection
-                    if current_time - self.last_unknown_detection >= self.unknown_cooldown:
-                        self._record_attendance(employee_name, face_data)
-                        self.last_unknown_detection = current_time
-                        self._control_gate(False)  # Don't open gate for unknown persons
+                    display_text = f"{greeting}, Orang Tidak Dikenal"
                 else:
-                    # Known employee logic
-                    if employee_name not in self.attendance_recorded:
-                        self._record_attendance(employee_name, face_data)
-                        self._control_gate(True)
+                    display_text = f"{greeting}, {employee_name}"
+
+                logger.info(display_text)
+        
+                speak_text(display_text)
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"Server communication error: {e}")
+
     
     def _check_checkout_eligibility(self, employee_name):
         """Check if employee is eligible for checkout based on time elapsed since check-in"""

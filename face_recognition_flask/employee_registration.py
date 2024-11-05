@@ -13,7 +13,7 @@ from datetime import datetime
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
-SERVER_URL = "http://172.254.2.153:5000"
+SERVER_URL = "http://172.254.3.21:5000"
 
 # List of positions available
 positions = [
@@ -261,7 +261,7 @@ elif menu == "Log Attendance":
             st.download_button(
                 label="Download CSV",
                 data=csv,
-                file_name=f'absensi_{filter_date.strftime("%Y-%m-%d") if filter_date else "all"}.csv',
+                file_name=f'absensi_{filter_date.strftime("%Y-%m-%d")}.csv',
                 mime='text/csv',
             )
 

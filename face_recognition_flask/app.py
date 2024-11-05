@@ -8,6 +8,8 @@ import faiss
 import base64
 import cv2
 import json
+import requests
+import self     
 from datetime import datetime, timedelta
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cosine
@@ -98,7 +100,7 @@ def convert_embedding(blob):
     return np.frombuffer(blob, dtype='f')
 
 class EnhancedFaceRecognition:
-    def __init__(self, threshold=0.6):
+    def __init__(self, threshold=0.3):
         self.threshold = threshold
         self.index = None
         self.employee_details = []
@@ -227,20 +229,29 @@ def identify_employee():
         
         if name == "Unknown":
             name = "Unknown Person"
-            # Insert the unknown person's details into attendance logs
-            status = 'masuk'  # or 'keluar' based on your system
-            record_attendance({"name": name, "image": image_base64, "status": status})
-            
+            status = 'masuk'  # atau 'keluar' berdasarkan kebutuhan
+            # Panggil endpoint /record-attendance secara langsung
+            requests.post(f"{self.SERVER_URL}/record-attendance", json={
+                "name": name,
+                "image": image_base64,
+                "status": status
+    })
+
+
+        # Add time period to the response
+        time_period = get_time_period()
+        
         return jsonify({
             "name": name,
             "position": position,
-            "confidence": float(confidence)
+            "confidence": float(confidence),
+            "time_period": time_period  # Add this line
         }), 200
 
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
-    
+
 @app.route('/employees', methods=['GET'])
 def get_employees():
     try:
@@ -333,21 +344,21 @@ def calculate_working_hours(jam_masuk, jam_keluar=None):
 #menambah endpoint attendance
 @app.route('/record-attendance', methods=['POST'])
 def record_attendance():
-    data = request.get_json()
+    data = request.get_json()  # Mendapatkan data dari request POST
     if not data:
         return jsonify({"message": "No data provided"}), 400
 
     employee_name = data['name']
     image_capture = data['image']
     status = data.get('status', 'masuk')
-    
+
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M:%S')
-            
-            # If it's an unknown person, record only the "masuk" status without "keluar"
+
+            # Logika untuk mencatat unknown person
             if employee_name == "Unknown Person":
                 cursor.execute("""
                     INSERT INTO attendance (
@@ -357,46 +368,36 @@ def record_attendance():
                     VALUES (?, ?, ?, NULL, NULL, ?, ?)
                 """, (employee_name, current_date, current_time, image_capture, status))
             else:
-                # Check if the employee is already checked in
+                # Cek apakah sudah ada catatan keluar terakhir dalam waktu 20 menit
                 cursor.execute("""
-                    SELECT id, jam_masuk 
+                    SELECT id, jam_keluar
                     FROM attendance 
-                    WHERE employee_name = ? AND date = ? AND status = 'masuk' AND jam_keluar IS NULL
+                    WHERE employee_name = ? AND date = ? AND status = 'keluar'
+                    ORDER BY jam_keluar DESC
+                    LIMIT 1
                 """, (employee_name, current_date))
                 
-                masuk_record = cursor.fetchone()
+                last_exit_record = cursor.fetchone()
                 
-                if masuk_record:
-                    # If re-captured after 10 minutes, mark as check-out and log work duration
-                    record_id, jam_masuk = masuk_record
-                    jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
-                    elapsed_time = datetime.strptime(current_time, '%H:%M:%S') - jam_masuk_time
+                # Jika catatan keluar terakhir kurang dari 20 menit, jangan buat catatan masuk baru
+                if last_exit_record:
+                    _, jam_keluar = last_exit_record
+                    jam_keluar_time = datetime.strptime(jam_keluar, '%H:%M:%S')
+                    elapsed_time = datetime.now() - jam_keluar_time
                     
-                    if elapsed_time.total_seconds() > 600:  # 10 minutes
-                        jam_kerja = str(elapsed_time)
-                        cursor.execute("""
-                            UPDATE attendance 
-                            SET jam_keluar = ?, jam_kerja = ?, status = 'keluar'
-                            WHERE id = ?
-                        """, (current_time, jam_kerja, record_id))
+                    if elapsed_time.total_seconds() < 600:  # 20 menit
+                        return jsonify({
+                            "message": f"Karyawan {employee_name} tidak perlu check-in karena baru saja check-out."
+                        }), 400
 
-                        # Create a new "masuk" record after check-out
-                        cursor.execute("""
-                            INSERT INTO attendance (
-                                employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
-                                image_capture, status
-                            )
-                            VALUES (?, ?, ?, NULL, NULL, ?, 'masuk')
-                        """, (employee_name, current_date, current_time, image_capture))
-                else:
-                    # If no active check-in, create a new "masuk" record
-                    cursor.execute("""
-                        INSERT INTO attendance (
-                            employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
-                            image_capture, status
-                        )
-                        VALUES (?, ?, ?, NULL, NULL, ?, ?)
-                    """, (employee_name, current_date, current_time, image_capture, status))
+                # Buat catatan masuk baru jika tidak ada catatan masuk aktif
+                cursor.execute("""
+                    INSERT INTO attendance (
+                        employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
+                        image_capture, status
+                    )
+                    VALUES (?, ?, ?, NULL, NULL, ?, 'masuk')
+                """, (employee_name, current_date, current_time, image_capture))
 
             conn.commit()
             return jsonify({
@@ -408,6 +409,7 @@ def record_attendance():
 
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
+
 
     
 #mendapatkan data presensi
