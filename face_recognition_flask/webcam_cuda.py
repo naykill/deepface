@@ -21,7 +21,8 @@ class FaceDetectionSystem:
         self.CAPTURE_INTERVAL = 5
         self.FRAME_SKIP = 2  # Process every nth frame
         self.DETECTION_SCALE = 0.5  # Scale down factor for face detection
-        
+        self.current_time_period = ""
+        self.last_status_update = ""
         # Initialize camera with RTSP
         self.cap = cv2.VideoCapture("http://172.254.0.124:2000/video")
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize frame buffer
@@ -65,8 +66,14 @@ class FaceDetectionSystem:
                 employee_name = data['name']
                 
                 if employee_name not in self.attendance_recorded:
-                    self._record_attendance(employee_name, face_data)
-                    self._control_gate(True)
+                    attendance_response = self._record_attendance(employee_name, face_data)
+                    if attendance_response.get('status') == 'terlambat':
+                        self.last_status_update = f"TERLAMBAT: {attendance_response.get('message')}"
+                    elif attendance_response.get('status') == 'minimum_not_met':
+                        self.last_status_update = f"WAKTU KERJA MINIMUM: {attendance_response.get('message')}"
+                    else:
+                        self._control_gate(True)
+                        self.current_time_period = attendance_response.get('time_period', '')
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"Server communication error: {e}")
@@ -84,12 +91,20 @@ class FaceDetectionSystem:
                 timeout=5
             )
             
+            response_data = response.json()
+            
             if response.status_code == 200:
                 self.attendance_recorded.add(employee_name)
                 logger.info(f"Attendance recorded for {employee_name}")
+                self.last_status_update = f"Presensi berhasil: {employee_name} ({response_data.get('time_period', '')})"
+            else:
+                self.last_status_update = response_data.get('message', 'Error recording attendance')
+            
+            return response_data
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Attendance recording error: {e}")
+            return {"status": "error", "message": str(e)}
 
     def _control_gate(self, should_open):
         """Control the gate state"""
