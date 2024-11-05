@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class FaceDetectionSystem:
     def __init__(self):
         # Configuration
-        self.SERVER_URL = "http://172.254.3.21:5000"
+        self.SERVER_URL = "http://172.254.2.153:5000"
         self.CAPTURE_INTERVAL = 5
         self.CHECKOUT_INTERVAL = 600  # 10 minutes in seconds
         self.FRAME_SKIP = 2  # Process every nth frame
@@ -72,7 +72,7 @@ class FaceDetectionSystem:
                 return time_elapsed >= self.CHECKOUT_INTERVAL
         return False
 
-    def _send_to_api(self, image_base64, status):
+    def _send_to_api(self, image_base64, status="masuk"):
         try:
             response = requests.post(
                 f"{self.SERVER_URL}/identify-employee",
@@ -86,24 +86,20 @@ class FaceDetectionSystem:
                 employee_name = data.get("name")
                 confidence = data.get("confidence")
                 
-                # Check if person should be checked out
-                if employee_name in self.attendance_records:
+                if employee_name == "Unknown Person":
+                    self._record_attendance("Unknown Person", image_base64, "masuk")
+                    logger.info("Unknown person detected and recorded")
+                else:
                     if self._check_checkout_eligibility(employee_name):
                         status = "keluar"
-                    else:
-                        logger.info(f"{employee_name} already checked in, waiting for checkout interval")
-                        return
-                
-                logger.info(f"Identified {employee_name} with confidence {confidence}")
-                self._record_attendance(employee_name, image_base64, status)
-                
+                    self._record_attendance(employee_name, image_base64, status)
+                    
             else:
-                # Handle unknown person
-                self._record_attendance("Unknown Person", image_base64, "masuk")
-                logger.info("Unknown person detected and recorded")
-                
+                logger.error("Failed to identify employee")
+                    
         except requests.exceptions.RequestException as e:
             logger.error(f"API request error: {e}")
+
             
     def _record_attendance(self, employee_name, image_base64, status):
         """Record attendance for an employee with specified status (masuk/keluar)"""

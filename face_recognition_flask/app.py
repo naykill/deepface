@@ -332,88 +332,71 @@ def calculate_working_hours(jam_masuk, jam_keluar=None):
 
 #menambah endpoint attendance
 @app.route('/record-attendance', methods=['POST'])
-def record_attendance(data):
+def record_attendance():
+    data = request.get_json()
+    if not data:
+        return jsonify({"message": "No data provided"}), 400
+
     employee_name = data['name']
     image_capture = data['image']
     status = data.get('status', 'masuk')
-
+    
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M:%S')
-
-            if status == 'masuk':
-                # For Unknown Person, always create a new entry
-                if employee_name == "Unknown Person":
-                    cursor.execute("""
-                        INSERT INTO attendance (
-                            employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
-                            image_capture, status
-                        )
-                        VALUES (?, ?, ?, NULL, NULL, ?, ?)
-                    """, (employee_name, current_date, current_time, image_capture, status))
-                else:
-                    # For known employees, check if already checked in
-                    cursor.execute("""
-                        SELECT * FROM attendance 
-                        WHERE employee_name = ? 
-                        AND date = ? 
-                        AND status = 'masuk'
-                    """, (employee_name, current_date))
-                    
-                    if cursor.fetchone():
-                        return jsonify({
-                            "message": f"Karyawan {employee_name} sudah melakukan presensi masuk hari ini"
-                        }), 400
-
-                    cursor.execute("""
-                        INSERT INTO attendance (
-                            employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
-                            image_capture, status
-                        )
-                        VALUES (?, ?, ?, NULL, NULL, ?, ?)
-                    """, (employee_name, current_date, current_time, image_capture, status))
-
-            elif status == 'keluar':
-                # For Unknown Person, update the most recent entry without a check-out time
-                if employee_name == "Unknown Person":
-                    cursor.execute("""
-                        SELECT id, jam_masuk 
-                        FROM attendance 
-                        WHERE employee_name = ? 
-                        AND date = ? 
-                        AND jam_keluar IS NULL
-                        ORDER BY jam_masuk DESC
-                        LIMIT 1
-                    """, (employee_name, current_date))
-                else:
-                    cursor.execute("""
-                        SELECT id, jam_masuk 
-                        FROM attendance 
-                        WHERE employee_name = ? 
-                        AND date = ? 
-                        AND status = 'masuk'
-                        AND jam_keluar IS NULL
-                    """, (employee_name, current_date))
+            
+            # If it's an unknown person, record only the "masuk" status without "keluar"
+            if employee_name == "Unknown Person":
+                cursor.execute("""
+                    INSERT INTO attendance (
+                        employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
+                        image_capture, status
+                    )
+                    VALUES (?, ?, ?, NULL, NULL, ?, ?)
+                """, (employee_name, current_date, current_time, image_capture, status))
+            else:
+                # Check if the employee is already checked in
+                cursor.execute("""
+                    SELECT id, jam_masuk 
+                    FROM attendance 
+                    WHERE employee_name = ? AND date = ? AND status = 'masuk' AND jam_keluar IS NULL
+                """, (employee_name, current_date))
                 
                 masuk_record = cursor.fetchone()
                 
-                if not masuk_record:
-                    return jsonify({
-                        "message": f"Tidak ditemukan masuk atas nama {employee_name} hari ini"
-                    }), 400
-                
-                record_id, jam_masuk = masuk_record
-                jam_kerja = calculate_working_hours(jam_masuk, current_time)
+                if masuk_record:
+                    # If re-captured after 10 minutes, mark as check-out and log work duration
+                    record_id, jam_masuk = masuk_record
+                    jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
+                    elapsed_time = datetime.strptime(current_time, '%H:%M:%S') - jam_masuk_time
+                    
+                    if elapsed_time.total_seconds() > 600:  # 10 minutes
+                        jam_kerja = str(elapsed_time)
+                        cursor.execute("""
+                            UPDATE attendance 
+                            SET jam_keluar = ?, jam_kerja = ?, status = 'keluar'
+                            WHERE id = ?
+                        """, (current_time, jam_kerja, record_id))
 
-                cursor.execute("""
-                    UPDATE attendance 
-                    SET jam_keluar = ?, 
-                        jam_kerja = ?,
-                        status = 'selesai'
-                    WHERE id = ?
-                """, (current_time, str(jam_kerja), record_id))
+                        # Create a new "masuk" record after check-out
+                        cursor.execute("""
+                            INSERT INTO attendance (
+                                employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
+                                image_capture, status
+                            )
+                            VALUES (?, ?, ?, NULL, NULL, ?, 'masuk')
+                        """, (employee_name, current_date, current_time, image_capture))
+                else:
+                    # If no active check-in, create a new "masuk" record
+                    cursor.execute("""
+                        INSERT INTO attendance (
+                            employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
+                            image_capture, status
+                        )
+                        VALUES (?, ?, ?, NULL, NULL, ?, ?)
+                    """, (employee_name, current_date, current_time, image_capture, status))
 
             conn.commit()
             return jsonify({
@@ -425,6 +408,7 @@ def record_attendance(data):
 
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
+
     
 #mendapatkan data presensi
 @app.route('/attendance-records', methods=['GET'])
