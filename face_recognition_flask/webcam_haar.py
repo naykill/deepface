@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class FaceDetectionSystem:
     def __init__(self):
         # Configuration
-        self.SERVER_URL = "http://172.254.3.21:5000"
+        self.SERVER_URL = "http://172.254.2.153:5000"
         self.CAPTURE_INTERVAL = 5
         self.FRAME_SKIP = 2  # Process every nth frame
         self.DETECTION_SCALE = 0.5  # Scale down factor for face detection
@@ -28,7 +28,6 @@ class FaceDetectionSystem:
         self.frame_count = 0
 
     def _send_to_api(self, image_base64, status):
-        """Send face data to the server for recognition and attendance recording"""
         try:
             response = requests.post(
                 f"{self.SERVER_URL}/identify-employee",
@@ -42,6 +41,8 @@ class FaceDetectionSystem:
                 confidence = data.get("confidence")
                 logger.info(f"Identified {employee_name} with confidence {confidence}")
                 self._record_attendance(employee_name, image_base64, status)
+            elif response.status_code == 404:  # Unrecognized person
+                self._record_attendance("Unknown Person", image_base64, status)
             else:
                 logger.warning("Person not recognized.")
         except requests.exceptions.RequestException as e:

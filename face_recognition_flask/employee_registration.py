@@ -13,7 +13,7 @@ from datetime import datetime
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
-SERVER_URL = "http://172.254.3.21:5000"
+SERVER_URL = "http://172.254.2.153:5000"
 
 # List of positions available
 positions = [
@@ -151,7 +151,7 @@ elif menu == "Edit/Hapus Karyawan":
                 else:
                     st.error(f"Error: {response.text}")
 
-#menu log
+# Log Attendance Section
 elif menu == "Log Attendance":
     st.title("Log Attendance Karyawan")
     
@@ -161,7 +161,8 @@ elif menu == "Log Attendance":
         emp_response = requests.get(f"{SERVER_URL}/employees-full")
         if emp_response.status_code == 200:
             employees = emp_response.json()
-            employee_names = ["Semua Karyawan"] + [emp["name"] for emp in employees]
+            # Include "Unknown Person" in the employee list
+            employee_names = ["Semua Karyawan", "Unknown Person"] + [emp["name"] for emp in employees]
             selected_employee = st.selectbox("Filter berdasarkan Karyawan:", employee_names)
     
     with col2:
@@ -171,15 +172,14 @@ elif menu == "Log Attendance":
     if st.button("Tampilkan Log Attendance"):
         if selected_employee == "Semua Karyawan":
             response = requests.get(f"{SERVER_URL}/attendance-records")
+        elif selected_employee == "Unknown Person":
+            # Fetch records for unknown individuals
+            response = requests.get(f"{SERVER_URL}/attendance-records/Unknown Person")
         else:
             response = requests.get(f"{SERVER_URL}/attendance-records/{selected_employee}")
         
         if response.status_code == 200:
             attendance_data = response.json()
-            
-            # # Debug: Print sample data structure
-            # if attendance_data and len(attendance_data) > 0:
-            #     st.write("Sample data structure:", attendance_data[0])
             
             if attendance_data:
                 # Filter berdasarkan tanggal jika dipilih
@@ -221,7 +221,7 @@ elif menu == "Log Attendance":
                         
                         # Add this record's data to our table - using get() to avoid KeyError
                         table_data.append([
-                            record.get('name', record.get('employee_name', 'Unknown')),  # Try both possible keys
+                            record.get('employee_name', 'Unknown Person'),  # Default to 'Unknown Person' if not found
                             tanggal,
                             record.get('jam_masuk', ''),
                             record.get('jam_keluar', ''),
@@ -239,10 +239,7 @@ elif menu == "Log Attendance":
                         "jam_kerja",
                         "status",
                         "image_capture"
-                        ])
-                    
-                    # Sort by date and time
-                    # df = df.sort_values(['Tanggal', 'Jam'], ascending=[False, False])
+                    ])
                     
                     # Display the table
                     st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
@@ -267,3 +264,4 @@ elif menu == "Log Attendance":
                 file_name=f'absensi_{filter_date.strftime("%Y-%m-%d") if filter_date else "all"}.csv',
                 mime='text/csv',
             )
+
