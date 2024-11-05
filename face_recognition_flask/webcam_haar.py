@@ -28,6 +28,7 @@ class FaceDetectionSystem:
         self.DETECTION_SCALE = 0.5  # Scale down factor for face detection
         self.unknown_cooldown = 300  # 5 minutes cooldown for unknown person detection
         self.last_unknown_detection = 0
+        self.attendance_records = {}  # Menyimpan status dan waktu check-in setiap karyawan
 
         # Initialize camera
         self.cap = cv2.VideoCapture('http://172.254.0.124:2000/video')  # Default camera
@@ -52,21 +53,59 @@ class FaceDetectionSystem:
                 data = response.json()
                 employee_name = data['name']
                 confidence = data.get('confidence', 0)
-                time_period = data.get('time_period', '')
-
-                greeting = f"Selamat {time_period}"
                 
+                current_time = datetime.now()
+
                 if employee_name == "Unknown Person":
-                    display_text = f"{greeting}, Orang Tidak Dikenal"
+                    # Rekam Unknown Person sebagai check-in setiap kali terdeteksi
+                    self._record_attendance(employee_name, face_data, "masuk")
                 else:
-                    display_text = f"{greeting}, {employee_name}"
+                    # Cek status karyawan yang sudah ada di attendance_records
+                    record = self.attendance_records.get(employee_name)
+                    
+                    if not record:
+                        # Jika karyawan belum tercatat, lakukan check-in
+                        self._record_attendance(employee_name, face_data, "masuk")
+                        # Simpan waktu check-in
+                        self.attendance_records[employee_name] = {
+                            "status": "masuk",
+                            "check_in_time": current_time
+                        }
+                    else:
+                        # Jika sudah tercatat, cek apakah bisa melakukan check-out
+                        check_in_time = record["check_in_time"]
+                        time_since_check_in = (current_time - check_in_time).total_seconds()
 
-                logger.info(display_text)
-        
-                speak_text(display_text)
-                
+                        if record["status"] == "masuk" and time_since_check_in >= self.CHECKOUT_INTERVAL:
+                            # Jika sudah lebih dari 20 menit sejak check-in, lakukan check-out
+                            self._record_attendance(employee_name, face_data, "keluar")
+                            # Update status karyawan menjadi check-out di records
+                            self.attendance_records[employee_name]["status"] = "keluar"
+                        else:
+                            print(f"{employee_name} masih belum bisa check-out, menunggu hingga 20 menit.")
+
         except requests.exceptions.RequestException as e:
-            logger.error(f"Server communication error: {e}")
+            print(f"Server communication error: {e}")
+
+    def _record_attendance(self, employee_name, image_base64, status):
+        """Mengirim permintaan untuk merekam kehadiran"""
+        try:
+            response = requests.post(
+                f"{self.SERVER_URL}/record-attendance",
+                json={
+                    "name": employee_name,
+                    "image": image_base64,
+                    "status": status
+                },
+                timeout=5
+            )
+            if response.status_code == 200:
+                print(f"{status.capitalize()} recorded for {employee_name}")
+            else:
+                print(f"Attendance recording failed: {response.text}")
+
+        except requests.exceptions.RequestException as e:
+            print(f"API request error: {e}")
 
     
     def _check_checkout_eligibility(self, employee_name):
