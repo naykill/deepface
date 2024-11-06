@@ -449,6 +449,38 @@ def record_attendance():
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
+@app.route('/attendance-records', methods=['GET'])
+def get_attendance_records():
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            # Ambil data presensi
+            cursor.execute("""
+                SELECT id, employee_name, date, jam_masuk, jam_keluar, jam_kerja, status, image_capture
+                FROM attendance 
+                ORDER BY date DESC, jam_masuk DESC
+            """)
+
+            records = cursor.fetchall()
+
+            attendance_list = []
+            for record in records:
+                attendance_list.append({
+                    'id': record[0],
+                    'employee_name': record[1],
+                    'date': record[2],
+                    'jam_masuk': record[3],
+                    'jam_keluar': record[4],
+                    'jam_kerja': record[5],
+                    'status': record[6],
+                    'image_capture': record[7]
+                })
+
+            return jsonify(attendance_list), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
 
 #endpoint data presensi per karyawan
 @app.route('/attendance-records/<employee_name>', methods=['GET'])
