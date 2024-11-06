@@ -17,11 +17,23 @@ def speak_text(text):
     tts = gTTS(text=text, lang='id')
     tts.save("greeting.mp3")
     os.system("mpg321 greeting.mp3")
-
+    
+def get_time_period():
+        """Return the time period based on current hour"""
+        hour = datetime.now().hour
+        if 5 <= hour < 12:
+            return "pagi"
+        elif 12 <= hour < 15:
+            return "siang"
+        elif 15 <= hour < 18:
+            return "sore"
+        else:
+            return "malam"
+        
 class FaceDetectionSystem:
     def __init__(self):
         # Configuration
-        self.SERVER_URL = "http://172.254.2.153:5000"
+        self.SERVER_URL = "http://172.254.3.21:5000"
         self.CAPTURE_INTERVAL = 5
         self.CHECKOUT_INTERVAL = 600  # 10 minutes in seconds
         self.FRAME_SKIP = 2  # Process every nth frame
@@ -39,7 +51,6 @@ class FaceDetectionSystem:
         self.last_capture_time = time.time()
         self.frame_count = 0
     
-
     def _handle_face_recognition(self, face_data):
         try:
             response = requests.post(
@@ -55,37 +66,90 @@ class FaceDetectionSystem:
                 confidence = data.get('confidence', 0)
                 
                 current_time = datetime.now()
-
+                
+                # Handle Unknown Person
                 if employee_name == "Unknown Person":
-                    # Rekam Unknown Person sebagai check-in setiap kali terdeteksi
-                    self._record_attendance(employee_name, face_data, "masuk")
-                else:
-                    # Cek status karyawan yang sudah ada di attendance_records
-                    record = self.attendance_records.get(employee_name)
-                    
-                    if not record:
-                        # Jika karyawan belum tercatat, lakukan check-in
+                    current_time_unix = time.time()
+                    if current_time_unix - self.last_unknown_detection >= self.unknown_cooldown:
                         self._record_attendance(employee_name, face_data, "masuk")
-                        # Simpan waktu check-in
-                        self.attendance_records[employee_name] = {
-                            "status": "masuk",
-                            "check_in_time": current_time
-                        }
-                    else:
-                        # Jika sudah tercatat, cek apakah bisa melakukan check-out
-                        check_in_time = record["check_in_time"]
-                        time_since_check_in = (current_time - check_in_time).total_seconds()
+                        self.last_unknown_detection = current_time_unix
+                    return
 
-                        if record["status"] == "masuk" and time_since_check_in >= self.CHECKOUT_INTERVAL:
-                            # Jika sudah lebih dari 20 menit sejak check-in, lakukan check-out
-                            self._record_attendance(employee_name, face_data, "keluar")
-                            # Update status karyawan menjadi check-out di records
-                            self.attendance_records[employee_name]["status"] = "keluar"
-                        else:
-                            print(f"{employee_name} masih belum bisa check-out, menunggu hingga 20 menit.")
+                # Get current status for employee
+                if employee_name not in self.attendance_records:
+                    self.attendance_records[employee_name] = {
+                        "status": "keluar",  # Default status
+                        "last_update": current_time - timedelta(hours=24)  # Ensure first check works
+                    }
+
+                record = self.attendance_records[employee_name]
+                time_since_last_update = (current_time - record["last_update"]).total_seconds()
+
+                # Determine if we should process this detection
+                if time_since_last_update < self.CAPTURE_INTERVAL:
+                    return
+
+                # Handle check-in
+                if record["status"] == "keluar":
+                    self._record_attendance(employee_name, face_data, "masuk")
+                    self.attendance_records[employee_name] = {
+                        "status": "masuk",
+                        "last_update": current_time,
+                        "check_in_time": current_time
+                    }
+                    logger.info(f"{employee_name} checked in ({get_time_period()})")
+
+                # Handle check-out
+                elif record["status"] == "masuk":
+                    time_since_checkin = (current_time - record["check_in_time"]).total_seconds()
+                    if time_since_checkin >= self.CHECKOUT_INTERVAL:
+                        self._record_attendance(employee_name, face_data, "keluar")
+                        self.attendance_records[employee_name] = {
+                            "status": "keluar",
+                            "last_update": current_time
+                        }
+                        logger.info(f"{employee_name} checked out ({get_time_period()})")
 
         except requests.exceptions.RequestException as e:
-            print(f"Server communication error: {e}")
+            logger.error(f"Server communication error: {e}")
+
+   
+
+    def _record_attendance(self, employee_name, image_base64, status):
+        """Record attendance with improved logging"""
+        try:
+            response = requests.post(
+                f"{self.SERVER_URL}/record-attendance",
+                json={
+                    "name": employee_name,
+                    "image": image_base64,
+                    "status": status
+                },
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                time_period = data.get('period', get_time_period())
+                status_msg = "masuk" if status == "masuk" else "keluar"
+                
+                if "warning" in data:
+                    logger.warning(f"{employee_name} {status_msg} - {time_period} - {data['warning']}")
+                else:
+                    logger.info(f"{employee_name} {status_msg} - {time_period}")
+                    
+                if status == "masuk":
+                    current_time = datetime.now()
+                    self.attendance_records[employee_name] = {
+                        "status": "masuk",
+                        "check_in_time": current_time,
+                        "last_update": current_time
+                    }
+            else:
+                logger.error(f"Failed to record attendance: {response.text}")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request error: {e}")
 
     def _record_attendance(self, employee_name, image_base64, status):
         """Mengirim permintaan untuk merekam kehadiran"""
