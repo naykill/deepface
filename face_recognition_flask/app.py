@@ -346,7 +346,15 @@ def record_attendance():
             cursor = conn.cursor()
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M:%S')
+            current_hour = datetime.now().hour
             
+            # Check if it's late arrival (after 11:00)
+            is_late = False
+            if status == 'masuk':
+                current_datetime = datetime.now()
+                max_arrival = current_datetime.replace(hour=11, minute=0, second=0)
+                is_late = current_datetime > max_arrival
+
             # If it's an unknown person, record only the "masuk" status
             if employee_name == "Unknown Person":
                 cursor.execute("""
@@ -358,33 +366,41 @@ def record_attendance():
                 """, (employee_name, current_date, current_time, image_capture, status))
                 
             else:
-                # Check if the employee is already checked in
+                # Check if employee already has an entry for today
                 cursor.execute("""
-                    SELECT id, jam_masuk 
+                    SELECT id, jam_masuk, status 
                     FROM attendance 
-                    WHERE employee_name = ? AND date = ? AND status = 'masuk' AND jam_keluar IS NULL
+                    WHERE employee_name = ? AND date = ? 
+                    ORDER BY jam_masuk DESC LIMIT 1
                 """, (employee_name, current_date))
                 
-                masuk_record = cursor.fetchone()
+                existing_record = cursor.fetchone()
                 
-                if masuk_record and status == 'keluar':
-                    # If checking out, update existing record with checkout time
-                    record_id, jam_masuk = masuk_record
-                    jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
-                    current_time_obj = datetime.strptime(current_time, '%H:%M:%S')
-                    elapsed_time = current_time_obj - jam_masuk_time
+                if existing_record:
+                    record_id, jam_masuk, current_status = existing_record
                     
-                    # Only update if more than 10 minutes have passed
-                    if elapsed_time.total_seconds() > 600:  # 10 minutes
-                        jam_kerja = str(elapsed_time)
-                        cursor.execute("""
-                            UPDATE attendance 
-                            SET jam_keluar = ?, jam_kerja = ?, status = 'keluar'
-                            WHERE id = ?
-                        """, (current_time, jam_kerja, record_id))
-                
-                elif not masuk_record and status == 'masuk':
-                    # If no active check-in and status is 'masuk', create new record
+                    # Handle checkout
+                    if status == 'keluar' and current_status == 'masuk':
+                        jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
+                        current_time_obj = datetime.strptime(current_time, '%H:%M:%S')
+                        elapsed_time = current_time_obj - jam_masuk_time
+                        
+                        if elapsed_time.total_seconds() > 600:  # 10 minutes minimum
+                            jam_kerja = str(elapsed_time)
+                            cursor.execute("""
+                                UPDATE attendance 
+                                SET jam_keluar = ?, jam_kerja = ?, status = 'keluar'
+                                WHERE id = ?
+                            """, (current_time, jam_kerja, record_id))
+                    
+                    # Prevent duplicate check-in
+                    elif status == 'masuk' and current_status == 'masuk':
+                        return jsonify({
+                            "message": f"{employee_name} already checked in today",
+                            "status": "already_checked_in"
+                        }), 200
+                        
+                elif status == 'masuk':  # New check-in
                     cursor.execute("""
                         INSERT INTO attendance (
                             employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
@@ -394,13 +410,22 @@ def record_attendance():
                     """, (employee_name, current_date, current_time, image_capture, status))
 
             conn.commit()
-            return jsonify({
+            
+            # Determine time period
+            time_period = get_time_period()
+            
+            response_data = {
                 "message": f"Attendance recorded for {employee_name}",
                 "date": current_date,
                 "time": current_time,
                 "status": status,
-                "period": get_time_period()  # Add time period to response
-            }), 200
+                "period": time_period
+            }
+            
+            if is_late and status == 'masuk':
+                response_data["warning"] = "Late arrival detected"
+                
+            return jsonify(response_data), 200
 
     except Exception as e:
         return jsonify({"message": f"Error: {str(e)}"}), 500

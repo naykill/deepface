@@ -6,10 +6,17 @@ import time
 import logging
 from datetime import datetime
 import timedelta
+from gtts import gTTS
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def speak_text(text):
+    tts = gTTS(text=text, lang='id')
+    tts.save("greeting.mp3")
+    os.system("mpg321 greeting.mp3")
 
 class FaceDetectionSystem:
     def __init__(self):
@@ -21,7 +28,8 @@ class FaceDetectionSystem:
         self.DETECTION_SCALE = 0.5  # Scale down factor for face detection
         self.unknown_cooldown = 300  # 5 minutes cooldown for unknown person detection
         self.last_unknown_detection = 0
-
+        self.attendance_records = {}  # Menyimpan status dan waktu check-in setiap karyawan
+        self.last_status_check = {}  # Track last status check for each employee
         # Initialize camera
         self.cap = cv2.VideoCapture('http://172.254.0.124:2000/video')  # Default camera
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -31,6 +39,7 @@ class FaceDetectionSystem:
         self.last_capture_time = time.time()
         self.frame_count = 0
     
+
     def _handle_face_recognition(self, face_data):
         try:
             response = requests.post(
@@ -45,23 +54,59 @@ class FaceDetectionSystem:
                 employee_name = data['name']
                 confidence = data.get('confidence', 0)
                 
-                current_time = time.time()
-                
-                # Handle Unknown Person differently
+                current_time = datetime.now()
+
                 if employee_name == "Unknown Person":
-                    # Check if enough time has passed since last unknown detection
-                    if current_time - self.last_unknown_detection >= self.unknown_cooldown:
-                        self._record_attendance(employee_name, face_data)
-                        self.last_unknown_detection = current_time
-                        self._control_gate(False)  # Don't open gate for unknown persons
+                    # Rekam Unknown Person sebagai check-in setiap kali terdeteksi
+                    self._record_attendance(employee_name, face_data, "masuk")
                 else:
-                    # Known employee logic
-                    if employee_name not in self.attendance_recorded:
-                        self._record_attendance(employee_name, face_data)
-                        self._control_gate(True)
-                
+                    # Cek status karyawan yang sudah ada di attendance_records
+                    record = self.attendance_records.get(employee_name)
+                    
+                    if not record:
+                        # Jika karyawan belum tercatat, lakukan check-in
+                        self._record_attendance(employee_name, face_data, "masuk")
+                        # Simpan waktu check-in
+                        self.attendance_records[employee_name] = {
+                            "status": "masuk",
+                            "check_in_time": current_time
+                        }
+                    else:
+                        # Jika sudah tercatat, cek apakah bisa melakukan check-out
+                        check_in_time = record["check_in_time"]
+                        time_since_check_in = (current_time - check_in_time).total_seconds()
+
+                        if record["status"] == "masuk" and time_since_check_in >= self.CHECKOUT_INTERVAL:
+                            # Jika sudah lebih dari 20 menit sejak check-in, lakukan check-out
+                            self._record_attendance(employee_name, face_data, "keluar")
+                            # Update status karyawan menjadi check-out di records
+                            self.attendance_records[employee_name]["status"] = "keluar"
+                        else:
+                            print(f"{employee_name} masih belum bisa check-out, menunggu hingga 20 menit.")
+
         except requests.exceptions.RequestException as e:
-            logger.error(f"Server communication error: {e}")
+            print(f"Server communication error: {e}")
+
+    def _record_attendance(self, employee_name, image_base64, status):
+        """Mengirim permintaan untuk merekam kehadiran"""
+        try:
+            response = requests.post(
+                f"{self.SERVER_URL}/record-attendance",
+                json={
+                    "name": employee_name,
+                    "image": image_base64,
+                    "status": status
+                },
+                timeout=5
+            )
+            if response.status_code == 200:
+                print(f"{status.capitalize()} recorded for {employee_name}")
+            else:
+                print(f"Attendance recording failed: {response.text}")
+
+        except requests.exceptions.RequestException as e:
+            print(f"API request error: {e}")
+
     
     def _check_checkout_eligibility(self, employee_name):
         """Check if employee is eligible for checkout based on time elapsed since check-in"""

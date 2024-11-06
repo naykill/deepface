@@ -24,7 +24,7 @@ positions = [
 
 # Sidebar with menu options
 st.sidebar.title("Menu")
-menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "Data Karyawan", "Edit/Hapus Karyawan","Log Absensi"])
+menu = st.sidebar.selectbox("Pilih Menu", ["Pendaftaran Karyawan", "Data Karyawan", "Edit/Hapus Karyawan","Log Attendance"])
 
 # Function to crop face from the image
 def crop_face(image):
@@ -151,9 +151,9 @@ elif menu == "Edit/Hapus Karyawan":
                 else:
                     st.error(f"Error: {response.text}")
 
-#menu log
-elif menu == "Log Absensi":
-    st.title("Log Absensi Karyawan")
+# Log Attendance Section
+elif menu == "Log Attendance":
+    st.title("Log Attendance Karyawan")
     
     # Tambahkan filter
     col1, col2 = st.columns(2)
@@ -161,25 +161,25 @@ elif menu == "Log Absensi":
         emp_response = requests.get(f"{SERVER_URL}/employees-full")
         if emp_response.status_code == 200:
             employees = emp_response.json()
-            employee_names = ["Semua Karyawan"] + [emp["name"] for emp in employees]
+            # Include "Unknown Person" in the employee list
+            employee_names = ["Semua Karyawan", "Unknown Person"] + [emp["name"] for emp in employees]
             selected_employee = st.selectbox("Filter berdasarkan Karyawan:", employee_names)
     
     with col2:
         filter_date = st.date_input("Filter berdasarkan Tanggal:")
     
     # Debug: Cek struktur data yang diterima
-    if st.button("Tampilkan Log Absensi"):
+    if st.button("Tampilkan Log Attendance"):
         if selected_employee == "Semua Karyawan":
             response = requests.get(f"{SERVER_URL}/attendance-records")
+        elif selected_employee == "Unknown Person":
+            # Fetch records for unknown individuals
+            response = requests.get(f"{SERVER_URL}/attendance-records/Unknown Person")
         else:
             response = requests.get(f"{SERVER_URL}/attendance-records/{selected_employee}")
         
         if response.status_code == 200:
             attendance_data = response.json()
-            
-            # # Debug: Print sample data structure
-            # if attendance_data and len(attendance_data) > 0:
-            #     st.write("Sample data structure:", attendance_data[0])
             
             if attendance_data:
                 # Filter berdasarkan tanggal jika dipilih
@@ -221,7 +221,7 @@ elif menu == "Log Absensi":
                         
                         # Add this record's data to our table - using get() to avoid KeyError
                         table_data.append([
-                            record.get('name', record.get('employee_name', 'Unknown')),  # Try both possible keys
+                            record.get('employee_name', 'Unknown Person'),  # Default to 'Unknown Person' if not found
                             tanggal,
                             record.get('jam_masuk', ''),
                             record.get('jam_keluar', ''),
@@ -234,25 +234,22 @@ elif menu == "Log Absensi":
                     df = pd.DataFrame(table_data, columns=[
                         "Nama Karyawan",
                         "Tanggal",
-                        "Jam Masuk",
-                        "Jam Keluar",
-                        "Jam Kerja",
-                        "Status",
-                        "Foto Absensi"
+                        "jam_masuk",
+                        "jam_keluar",
+                        "jam_kerja",
+                        "status",
+                        "image_capture"
                     ])
-                    
-                    # Sort by date and time
-                    df = df.sort_values(['Tanggal', 'Jam Masuk', 'Jam Keluar', 'Jam Kerja'], ascending=[False, False])
                     
                     # Display the table
                     st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
                     
                 else:
-                    st.info("Tidak ada data absensi untuk filter yang dipilih.")
+                    st.info("Tidak ada data presensi untuk filter yang dipilih.")
             else:
-                st.info("Belum ada data absensi.")
+                st.info("Belum ada data presensi.")
         else:
-            st.error(f"Gagal mengambil data absensi: {response.text}")
+            st.error(f"Gagal mengambil data presensi: {response.text}")
 
     # Tambahkan opsi ekspor data
     if st.button("Ekspor Data ke CSV"):
