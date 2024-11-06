@@ -346,7 +346,6 @@ def record_attendance():
             cursor = conn.cursor()
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M:%S')
-            current_hour = datetime.now().hour
             
             # Check if it's late arrival (after 11:00)
             is_late = False
@@ -359,16 +358,15 @@ def record_attendance():
             if employee_name == "Unknown Person":
                 cursor.execute("""
                     INSERT INTO attendance (
-                        employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
-                        image_capture, status
+                        employee_name, date, jam_masuk, image_capture, status
                     )
-                    VALUES (?, ?, ?, NULL, NULL, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                 """, (employee_name, current_date, current_time, image_capture, status))
                 
             else:
                 # Check if employee already has an entry for today
                 cursor.execute("""
-                    SELECT id, jam_masuk, status 
+                    SELECT id, jam_masuk, status, jam_keluar 
                     FROM attendance 
                     WHERE employee_name = ? AND date = ? 
                     ORDER BY jam_masuk DESC LIMIT 1
@@ -377,37 +375,58 @@ def record_attendance():
                 existing_record = cursor.fetchone()
                 
                 if existing_record:
-                    record_id, jam_masuk, current_status = existing_record
+                    record_id, jam_masuk, current_status, jam_keluar = existing_record
                     
-                    # Handle checkout
-                    if status == 'keluar' and current_status == 'masuk':
+                    # Handle checkout - only if there's no previous checkout and status is 'masuk'
+                    if status == 'keluar' and current_status == 'masuk' and jam_keluar is None:
+                        # Calculate time difference
                         jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M:%S')
                         current_time_obj = datetime.strptime(current_time, '%H:%M:%S')
-                        elapsed_time = current_time_obj - jam_masuk_time
                         
-                        if elapsed_time.total_seconds() > 600:  # 10 minutes minimum
+                        # Calculate elapsed time in minutes
+                        elapsed_time = current_time_obj - jam_masuk_time
+                        elapsed_minutes = elapsed_time.total_seconds() / 60
+                        
+                        # Only allow checkout if more than 10 minutes have passed
+                        if elapsed_minutes >= 10:
                             jam_kerja = str(elapsed_time)
                             cursor.execute("""
                                 UPDATE attendance 
                                 SET jam_keluar = ?, jam_kerja = ?, status = 'keluar'
                                 WHERE id = ?
                             """, (current_time, jam_kerja, record_id))
+                            response_message = f"Checkout recorded for {employee_name}"
+                        else:
+                            return jsonify({
+                                "message": "Minimum working time (10 minutes) not reached",
+                                "status": "early_checkout"
+                            }), 400
                     
                     # Prevent duplicate check-in
-                    elif status == 'masuk' and current_status == 'masuk':
+                    elif status == 'masuk' and current_status == 'masuk' and jam_keluar is None:
                         return jsonify({
                             "message": f"{employee_name} already checked in today",
                             "status": "already_checked_in"
                         }), 200
                         
-                elif status == 'masuk':  # New check-in
+                    # Allow new check-in if previous session was checked out
+                    elif status == 'masuk' and (current_status == 'keluar' or jam_keluar is not None):
+                        cursor.execute("""
+                            INSERT INTO attendance (
+                                employee_name, date, jam_masuk, image_capture, status
+                            )
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (employee_name, current_date, current_time, image_capture, status))
+                        response_message = f"New check-in recorded for {employee_name}"
+                        
+                elif status == 'masuk':  # First check-in of the day
                     cursor.execute("""
                         INSERT INTO attendance (
-                            employee_name, date, jam_masuk, jam_keluar, jam_kerja, 
-                            image_capture, status
+                            employee_name, date, jam_masuk, image_capture, status
                         )
-                        VALUES (?, ?, ?, NULL, NULL, ?, ?)
+                        VALUES (?, ?, ?, ?, ?)
                     """, (employee_name, current_date, current_time, image_capture, status))
+                    response_message = f"First check-in recorded for {employee_name}"
 
             conn.commit()
             
@@ -415,7 +434,7 @@ def record_attendance():
             time_period = get_time_period()
             
             response_data = {
-                "message": f"Attendance recorded for {employee_name}",
+                "message": response_message if 'response_message' in locals() else f"Attendance recorded for {employee_name}",
                 "date": current_date,
                 "time": current_time,
                 "status": status,
