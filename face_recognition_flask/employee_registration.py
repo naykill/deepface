@@ -170,11 +170,11 @@ elif menu == "Log Attendance":
     
     # Debug: Cek struktur data yang diterima
     if st.button("Tampilkan Log Attendance"):
+        # Modify the API endpoint based on selection
         if selected_employee == "Semua Karyawan":
-            response = requests.get(f"{SERVER_URL}/attendance-records")
+            response = requests.get(f"{SERVER_URL}/attendance-records")  # Changed endpoint
         elif selected_employee == "Unknown Person":
-            # Fetch records for unknown individuals
-            response = requests.get(f"{SERVER_URL}/attendance-records/Unknown Person")
+            response = requests.get(f"{SERVER_URL}/attendance-records")  # Changed endpoint
         else:
             response = requests.get(f"{SERVER_URL}/attendance-records/{selected_employee}")
         
@@ -221,7 +221,7 @@ elif menu == "Log Attendance":
                         
                         # Add this record's data to our table - using get() to avoid KeyError
                         table_data.append([
-                            record.get('employee_name', 'Unknown Person'),  # Default to 'Unknown Person' if not found
+                            record.get('employee_name', 'Unknown Person'),
                             tanggal,
                             record.get('jam_masuk', ''),
                             record.get('jam_keluar', ''),
@@ -234,11 +234,11 @@ elif menu == "Log Attendance":
                     df = pd.DataFrame(table_data, columns=[
                         "Nama Karyawan",
                         "Tanggal",
-                        "jam_masuk",
-                        "jam_keluar",
-                        "jam_kerja",
-                        "status",
-                        "image_capture"
+                        "Jam Masuk",
+                        "Jam Keluar", 
+                        "Jam Kerja",
+                        "Status",
+                        "Foto Capture"
                     ])
                     
                     # Display the table
@@ -249,7 +249,7 @@ elif menu == "Log Attendance":
             else:
                 st.info("Belum ada data presensi.")
         else:
-            st.error(f"Gagal mengambil data presensi: {response.text}")
+            st.error(f"Gagal mengambil data presensi. Status code: {response.status_code}. Response: {response.text}")
 
     # Tambahkan opsi ekspor data
     if st.button("Ekspor Data ke CSV"):
@@ -261,7 +261,6 @@ elif menu == "Log Attendance":
             st.download_button(
                 label="Download CSV",
                 data=csv,
-                file_name=f'absensi_{filter_date.strftime("%Y-%m-%d")}.csv',
+                file_name=f'absensi_{filter_date.strftime("%Y-%m-%d") if filter_date else "all"}.csv',
                 mime='text/csv',
             )
-
