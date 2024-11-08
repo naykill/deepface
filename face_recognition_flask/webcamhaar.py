@@ -4,12 +4,33 @@ import requests
 import numpy as np
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from gtts import gTTS
 import os
+import paho.mqtt.client as mqtt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# MQTT setup
+MQTT_BROKER = "172.254.3.114"  # Replace with your MQTT broker IP/hostname
+MQTT_PORT = 1884
+MQTT_TOPIC = "gate/open"
+MQTT_USER = 'tlab'  # Replace with your MQTT username
+MQTT_PASSWORD = '1234'  # Replace with your MQTT password
+mqtt_client = mqtt.Client()
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        logger.info("Connected to MQTT broker")
+    else:
+        logger.error("Failed to connect to MQTT broker, Return code %d", rc)
+
+mqtt_client.on_connect = on_connect
+# Set the username and password for MQTT
+mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Corrected connection
+mqtt_client.loop_start()
 
 def speak_text(text):
     tts = gTTS(text=text, lang='id')
@@ -28,20 +49,17 @@ def get_time_period():
         return "malam"
         
 class FaceDetectionSystem:
-    def __init__(self):
+    def _init_(self):
         self.SERVER_URL = "http://172.254.3.21:5000"
         self.CAPTURE_INTERVAL = 5
-        self.CHECKOUT_INTERVAL = 600  # 10 minutes in seconds
+        self.CHECKOUT_INTERVAL = 600
         self.FRAME_SKIP = 2
         self.DETECTION_SCALE = 0.5
         self.unknown_cooldown = 300
         self.last_unknown_detection = 0
-        
-        # Enhanced attendance tracking
-        self.attendance_records = {}  # Track employee attendance status
-        self.last_detection_time = {}  # Track last detection time for each employee
-        
-        self.cap = cv2.VideoCapture('http://172.254.0.124:2000/video')
+        self.attendance_records = {}
+        self.last_detection_time = {}
+        self.cap = cv2.VideoCapture(0)
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.frame_count = 0
         self.last_capture_time = time.time()
@@ -59,15 +77,13 @@ class FaceDetectionSystem:
                 data = response.json()
                 employee_name = data['name']
                 current_time = time.time()
-                
-                # Handle Unknown Person
+
                 if employee_name == "Unknown Person":
                     if current_time - self.last_unknown_detection >= self.unknown_cooldown:
                         self._record_attendance(employee_name, face_data, "masuk")
                         self.last_unknown_detection = current_time
                     return
 
-                # Initialize employee record if not exists
                 if employee_name not in self.attendance_records:
                     self.attendance_records[employee_name] = {
                         "status": "keluar",
@@ -77,27 +93,24 @@ class FaceDetectionSystem:
 
                 record = self.attendance_records[employee_name]
                 
-                # Handle new detection
                 if current_time - record["last_detection"] >= self.CAPTURE_INTERVAL:
                     record["last_detection"] = current_time
                     
-                    # Handle check-in
                     if record["status"] == "keluar":
                         self._record_attendance(employee_name, face_data, "masuk")
                         record["status"] = "masuk"
                         record["check_in_time"] = current_time
                         logger.info(f"{employee_name} checked in")
-                    
-                    # Handle check-out
+                        mqtt_client.publish(MQTT_TOPIC, f"{employee_name} checked in")
+
                     elif record["status"] == "masuk":
                         time_since_checkin = current_time - record["check_in_time"]
-                        
-                        # Only attempt checkout if minimum time has passed
                         if time_since_checkin >= self.CHECKOUT_INTERVAL:
                             self._record_attendance(employee_name, face_data, "keluar")
                             record["status"] = "keluar"
                             record["check_in_time"] = None
                             logger.info(f"{employee_name} checked out after {time_since_checkin/60:.1f} minutes")
+                            mqtt_client.publish(MQTT_TOPIC, f"{employee_name} checked out")
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Server communication error: {e}")
