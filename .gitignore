@@ -1,5 +1,5 @@
 .venv/
 .ipynb_checkpoints/
 __pycache__/
-__pycache__/face_recognition_flask/
-__pycache__/Belajar-DeepFace/
+face_recognition_flask/__pycache__/
+Belajar-DeepFace/__pycache__/
