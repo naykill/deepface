@@ -7,7 +7,6 @@ from datetime import datetime
 import threading
 from queue import Queue
 import logging
-import paho.mqtt.client as mqtt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,17 +15,16 @@ logger = logging.getLogger(__name__)
 class FaceDetectionSystem:
     def __init__(self):
         # Configuration
-        self.SERVER_URL = "http://172.254.3.21:5000"
-        self.MQTT_BROKER = "172.254.2.153"  # Jetson Nano's IP
-        self.MQTT_PORT = 1883
-        self.MQTT_TOPIC_OPEN = "gate/open"
-        self.MQTT_TOPIC_CLOSE = "gate/close"
+        self.SERVER_URL = "http://172.254.2.153:5000"
+        self.ESP32_URL_OPEN = "http://172.254.2.78/open-gate"
+        self.ESP32_URL_CLOSE = "http://172.254.2.78/close-gate"
         self.CAPTURE_INTERVAL = 5
         self.FRAME_SKIP = 2  # Process every nth frame
         self.DETECTION_SCALE = 0.5  # Scale down factor for face detection
-        
+        self.current_time_period = ""
+        self.last_status_update = ""
         # Initialize camera with RTSP
-        self.cap = cv2.VideoCapture("http://172.254.1.122:4747/video")
+        self.cap = cv2.VideoCapture("http://172.254.0.124:2000/video")
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize frame buffer
         
         # Initialize face detector
@@ -43,11 +41,6 @@ class FaceDetectionSystem:
         self.api_queue = Queue(maxsize=1)  # Only queue latest detection
         self.api_thread = threading.Thread(target=self._process_api_requests, daemon=True)
         self.api_thread.start()
-        
-        # MQTT client setup
-        self.mqtt_client = mqtt.Client()
-        self.mqtt_client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
-        self.mqtt_client.loop_start()
 
     def _process_api_requests(self):
         """Background thread for handling API requests"""
@@ -73,8 +66,14 @@ class FaceDetectionSystem:
                 employee_name = data['name']
                 
                 if employee_name not in self.attendance_recorded:
-                    self._record_attendance(employee_name, face_data)
-                    self._control_gate(True)
+                    attendance_response = self._record_attendance(employee_name, face_data)
+                    if attendance_response.get('status') == 'terlambat':
+                        self.last_status_update = f"TERLAMBAT: {attendance_response.get('message')}"
+                    elif attendance_response.get('status') == 'minimum_not_met':
+                        self.last_status_update = f"WAKTU KERJA MINIMUM: {attendance_response.get('message')}"
+                    else:
+                        self._control_gate(True)
+                        self.current_time_period = attendance_response.get('time_period', '')
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"Server communication error: {e}")
@@ -92,23 +91,31 @@ class FaceDetectionSystem:
                 timeout=5
             )
             
+            response_data = response.json()
+            
             if response.status_code == 200:
                 self.attendance_recorded.add(employee_name)
                 logger.info(f"Attendance recorded for {employee_name}")
+                self.last_status_update = f"Presensi berhasil: {employee_name} ({response_data.get('time_period', '')})"
+            else:
+                self.last_status_update = response_data.get('message', 'Error recording attendance')
+            
+            return response_data
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Attendance recording error: {e}")
+            return {"status": "error", "message": str(e)}
 
     def _control_gate(self, should_open):
-        """Control the gate state using MQTT"""
+        """Control the gate state"""
         if should_open != self.gate_opened:
             try:
-                topic = self.MQTT_TOPIC_OPEN if should_open else self.MQTT_TOPIC_CLOSE
-                self.mqtt_client.publish(topic, "1" if should_open else "0")
+                url = self.ESP32_URL_OPEN if should_open else self.ESP32_URL_CLOSE
+                requests.get(url, timeout=2)
                 self.gate_opened = should_open
-                logger.info(f"Gate {'opened' if should_open else 'closed'} via MQTT")
-            except Exception as e:
-                logger.error(f"Gate control error via MQTT: {e}")
+                logger.info(f"Gate {'opened' if should_open else 'closed'}")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Gate control error: {e}")
 
     def _reset_attendance_if_needed(self):
         """Reset attendance records at midnight"""
@@ -185,11 +192,8 @@ class FaceDetectionSystem:
 
         finally:
             self.cap.release()
-            self.mqtt_client.loop_stop()
-            self.mqtt_client.disconnect()
             cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     system = FaceDetectionSystem()
     system.run()
-

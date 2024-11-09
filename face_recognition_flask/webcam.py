@@ -5,10 +5,10 @@ import numpy as np
 import time
 from datetime import datetime
 
-# Inisialisasi webcam
-cap = cv2.VideoCapture(0)  # Ganti dengan 1 jika menggunakan webcam eksternal
+# Initialize webcam
+cap = cv2.VideoCapture("http://172.254.0.124:2000/video")  # Change to 1 for external webcam
 if not cap.isOpened():
-    print("Error: Webcam tidak dapat dibuka. Pastikan kamera terhubung dan berfungsi.")
+    print("Error: Cannot open webcam. Make sure the camera is connected and working.")
     exit()
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -16,90 +16,128 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 SERVER_URL = "http://172.254.2.153:5000"
 
 # ESP32 URLs for controlling the gate
-ESP32_URL_OPEN = "http://172.254.2.78/open-gate"   # Replace with your ESP32 IP for opening the gate
-ESP32_URL_CLOSE = "http://172.254.2.78/close-gate" # Replace with your ESP32 IP for closing the gate
+ESP32_URL_OPEN = "http://172.254.2.78/open-gate"
+ESP32_URL_CLOSE = "http://172.254.2.78/close-gate"
 
-# Set interval pengambilan gambar (5 detik)
+# Set capture interval (5 seconds)
 capture_interval = 5
 start_time = time.time()
 
-# Tambahkan variabel untuk tracking absensi
-attendance_recorded = set()  # Untuk mencatat siapa saja yang sudah absen hari ini
+# Variables for tracking attendance
+attendance_status = {}  # Track check-in/check-out status for each employee
 current_date = datetime.now().strftime('%Y-%m-%d')
 
 def reset_attendance_record():
-    global attendance_recorded, current_date
+    """Reset attendance records at the start of a new day"""
+    global attendance_status, current_date
     new_date = datetime.now().strftime('%Y-%m-%d')
     if new_date != current_date:
-        attendance_recorded.clear()
+        attendance_status.clear()
         current_date = new_date
 
-# Tambahkan flag untuk status gate
+def handle_attendance(employee_name, image_base64):
+    """Handle the attendance logic for an employee"""
+    try:
+        # Check if employee has checked in today
+        if employee_name not in attendance_status:
+            # Attempt to check in
+            attendance_response = requests.post(
+                f"{SERVER_URL}/record-attendance",
+                json={
+                    "name": employee_name,
+                    "image": image_base64,
+                    "status": "masuk"
+                }
+            )
+        else:
+            # If already checked in, attempt to check out
+            attendance_response = requests.post(
+                f"{SERVER_URL}/record-attendance",
+                json={
+                    "name": employee_name,
+                    "image": image_base64,
+                    "status": "keluar"
+                }
+            )
+        
+        if attendance_response.status_code == 200:
+            response_data = attendance_response.json()
+            status = response_data.get('status', '')
+            
+            if status == 'masuk':
+                attendance_status[employee_name] = 'checked_in'
+                print(f"Check-in successful: {employee_name}")
+            elif status == 'selesai':
+                attendance_status.pop(employee_name, None)
+                print(f"Check-out successful: {employee_name}")
+                
+            print(f"Date: {response_data['date']}")
+            print(f"Time: {response_data['time']}")
+            print(f"Period: {response_data['time_period']}")
+            return True
+            
+        else:
+            error_msg = attendance_response.json().get('message', 'Unknown error')
+            print(f"Attendance recording failed: {error_msg}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"Error connecting to server: {e}")
+        return False
+
+# Add flag for gate status
 gate_opened = False
 
 while True:
-    reset_attendance_record()  # Reset data absensi jika hari berganti
+    reset_attendance_record()  # Reset attendance records if day changes
     
-    # Baca frame dari webcam
+    # Read frame from webcam
     ret, frame = cap.read()
     if not ret:
-        print("Error: Tidak dapat membaca dari webcam.")
+        print("Error: Cannot read from webcam.")
         break
 
-    # Deteksi wajah
+    # Detect faces
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray_frame, 1.3, 5)
 
-    # Jika wajah terdeteksi, capture wajah
+    # If face is detected, capture face
     if len(faces) > 0:
         current_time = time.time()
         if current_time - start_time >= capture_interval:
             for (x, y, w, h) in faces:
-                # Ekstrak wajah dari frame
+                # Extract face from frame
                 face = frame[y:y+h, x:x+w]
 
-                # Konversi wajah ke base64
+                # Convert face to base64
                 _, buffer = cv2.imencode('.jpg', face)
                 image_base64 = base64.b64encode(buffer).decode('utf-8')
 
-                # Kirim gambar ke server untuk identifikasi
+                # Send image to server for identification
                 try:
-                    response = requests.post(f"{SERVER_URL}/identify-employee", 
-                                             json={"image": image_base64},
-                                             headers={'Content-Type': 'application/json'})
+                    response = requests.post(
+                        f"{SERVER_URL}/identify-employee", 
+                        json={"image": image_base64},
+                        headers={'Content-Type': 'application/json'}
+                    )
+                    
                     if response.status_code == 200:
                         data = response.json()
                         employee_name = data['name']
-                        # Cek apakah karyawan sudah absen hari ini
-                        if employee_name not in attendance_recorded:
-                            # Catat absensi
-                            attendance_response = requests.post(
-                                f"{SERVER_URL}/record-attendance",
-                                json={
-                                    "name": employee_name,
-                                    "image": image_base64,
-                                    "status": "masuk"
-                                }
-                            )
-                            
-                            if attendance_response.status_code == 200:
-                                attendance_data = attendance_response.json()
-                                print(f"Presensi berhasil: {employee_name}")
-                                print(f"Tanggal: {attendance_data['date']}")
-                                print(f"Jam: {attendance_data['time']}")
-                                attendance_recorded.add(employee_name)
-                            else:
-                                print(f"Gagal mencatat presensi: {attendance_response.json()['message']}")
                         
-                        print(f"Selamat datang {data['name']} - {data['position']}")
+                        # Handle attendance and get success status
+                        attendance_success = handle_attendance(employee_name, image_base64)
+                        
+                        print(f"Welcome {data['name']} - {data['position']}")
+                        print(f"Confidence: {data['confidence']:.2f}")
 
-                        # Send request to ESP32 to open the gate if it's not already opened
-                        if not gate_opened:
+                        # Open gate only if attendance was successful
+                        if attendance_success and not gate_opened:
                             try:
                                 esp_response = requests.get(ESP32_URL_OPEN)
                                 if esp_response.status_code == 200:
                                     print("Gate opened successfully!")
-                                    gate_opened = True  # Update gate status
+                                    gate_opened = True
                             except requests.exceptions.RequestException as e:
                                 print(f"Error connecting to ESP32: {e}")
                     else:
@@ -110,23 +148,23 @@ while True:
             start_time = current_time
 
     else:
-        # If no face is detected, send request to close the gate if it's currently opened
-        if gate_opened:  # Only close if the gate is opened
+        # Close gate if no face is detected and gate is open
+        if gate_opened:
             try:
                 esp_response = requests.get(ESP32_URL_CLOSE)
                 if esp_response.status_code == 200:
                     print("Gate closed successfully!")
-                    gate_opened = False  # Update gate status
+                    gate_opened = False
             except requests.exceptions.RequestException as e:
                 print(f"Error connecting to ESP32: {e}")
 
-    # Tampilkan frame webcam dengan kotak di sekitar wajah
+    # Display webcam frame with face rectangles
     for (x, y, w, h) in faces:
         cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
     cv2.imshow('Webcam', frame)
 
-    # Tekan ESC untuk keluar
+    # Press ESC to exit
     if cv2.waitKey(1) & 0xFF == 27:
         break
 

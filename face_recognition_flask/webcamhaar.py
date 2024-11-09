@@ -10,7 +10,7 @@ import os
 import paho.mqtt.client as mqtt
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(_name_)
+logger = logging.getLogger(__name__)
 
 # MQTT setup
 MQTT_BROKER = "172.254.3.114"  # Replace with your MQTT broker IP/hostname
@@ -195,6 +195,6 @@ class FaceDetectionSystem:
             self.cap.release()
             cv2.destroyAllWindows()
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     system = FaceDetectionSystem()
     system.run()
