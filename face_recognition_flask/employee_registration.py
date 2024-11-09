@@ -11,12 +11,24 @@ from datetime import datetime
 import calendar
 import plotly.express as px
 import plotly.graph_objects as go
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+
+# Konfigurasi aplikasi
+SERVER_URL = os.getenv('BACKEND_SERVER_URL')
+STREAMLIT_PORT = int(os.getenv('STREAMLIT_SERVER_PORT', 8501))
+STREAMLIT_ADDRESS = os.getenv('STREAMLIT_SERVER_ADDRESS', '0.0.0.0')
+IMAGE_TYPES = os.getenv('IMAGE_UPLOAD_TYPES', 'jpg,jpeg,png').split(',')
+DATE_FORMAT = os.getenv('DEFAULT_DATE_FORMAT', '%Y-%m-%d')
+TIME_FORMAT = os.getenv('DEFAULT_TIME_FORMAT', '%H:%M:%S')
+FACE_CASCADE_PATH = os.getenv('FACE_CASCADE_PATH')
 # Function to convert file image to base64
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
-SERVER_URL = "http://172.254.3.21:5000"
+SERVER_URL = SERVER_URL
 
 # List of positions available
 positions = [

@@ -11,12 +11,18 @@ import json
 from datetime import datetime, timedelta
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cosine
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app) if os.getenv('CORS_ENABLED', 'True').lower() == 'true' else None
 
 # Path to SQLite database
-db_path = './face_embeddings.db'
+db_path = os.getenv('DB_PATH')
+model_name = os.getenv('FACE_RECOGNITION_MODEL')
+detector_backend = os.getenv('FACE_DETECTOR_BACKEND')
+recognition_threshold = float(os.getenv('FACE_RECOGNITION_THRESHOLD'))
 
 # Initialize SQLite database and create tables if they don't exist
 def init_db():
@@ -220,7 +226,7 @@ def identify_employee():
             embeddings.append(embedding)
             employee_details.append((emp['name'], emp['position']))
 
-        recognition = EnhancedFaceRecognition(threshold=0.3)
+        recognition = EnhancedFaceRecognition(recognition_threshold)
         recognition.build_index(embeddings, employee_details)
         
         name, position, confidence = recognition.identify(target_embedding)
