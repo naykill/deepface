@@ -8,16 +8,27 @@ from datetime import datetime
 from gtts import gTTS
 import os
 import paho.mqtt.client as mqtt
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+
+# Replace hardcoded values with environment variables
+MQTT_BROKER = os.getenv('MQTT_BROKER')
+MQTT_PORT = int(os.getenv('MQTT_PORT'))
+MQTT_TOPIC = os.getenv('MQTT_TOPIC')
+MQTT_USER = os.getenv('MQTT_USERNAME')
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+SERVER_URL = os.getenv('BACKEND_SERVER_URL')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # MQTT setup
 MQTT_BROKER = "172.254.3.114"  # Replace with your MQTT broker IP/hostname
-MQTT_PORT = 1884
-MQTT_TOPIC = "gate/open"
-MQTT_USER = 'tlab'  # Replace with your MQTT username
-MQTT_PASSWORD = '1234'  # Replace with your MQTT password
+MQTT_PORT = MQTT_PORT
+MQTT_TOPIC = MQTT_TOPIC
+MQTT_USER = MQTT_USER  # Replace with your MQTT username
+MQTT_PASSWORD = MQTT_PASSWORD  # Replace with your MQTT password
 mqtt_client = mqtt.Client()
 
 def on_connect(client, userdata, flags, rc):
@@ -50,7 +61,7 @@ def get_time_period():
         
 class FaceDetectionSystem:
     def _init_(self):
-        self.SERVER_URL = "http://172.254.3.21:5000"
+        self.SERVER_URL = SERVER_URL
         self.CAPTURE_INTERVAL = 5
         self.CHECKOUT_INTERVAL = 600
         self.FRAME_SKIP = 2

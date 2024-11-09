@@ -162,8 +162,8 @@ def register_employee():
     position = data['position']
     image_base64 = data['image']  # The base64 image data
 
-    model_name = "Facenet"
-    detector_backend = "opencv"
+    model_name = model_name
+    detector_backend = detector_backend
 
     try:
         # Decode base64 image to process it with DeepFace
@@ -211,8 +211,8 @@ def identify_employee():
 
         target_embedding = DeepFace.represent(
             img_path=img,
-            model_name="Facenet",
-            detector_backend="opencv",
+            model_name=model_name,
+            detector_backend=detector_backend,
             enforce_detection=False
         )[0]["embedding"]
 
