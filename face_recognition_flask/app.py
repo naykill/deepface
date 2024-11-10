@@ -13,6 +13,7 @@ from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cosine
 from dotenv import load_dotenv
 import os
+import logging
 load_dotenv()
 
 app = Flask(__name__)
@@ -161,6 +162,28 @@ class EnhancedFaceRecognition:
         name, position = self.employee_details[match_idx]
         
         return name, position, confidence
+
+@app.after_request
+def custom_log(response):
+    # Dapatkan informasi IP, metode, path, dan kode status
+    ip_address = request.remote_addr
+    method = request.method
+    path = request.path
+    status_code = response.status_code
+
+    # Tentukan pesan sesuai dengan status kode
+    if status_code == 200:
+        message = "berhasil mendapatkan data employees."
+    elif status_code == 404:
+        message = "data tidak ditemukan."
+    else:
+        message = response.status
+
+    # Format log
+    log_message = f'{ip_address} - - [{datetime.now().strftime("%d/%b/%Y %H:%M:%S")}] "{method} {path} HTTP/1.1" {status_code} {message}'
+    app.logger.info(log_message)
+
+    return response
 
 @app.route('/register-employee', methods=['POST'])
 def register_employee():
