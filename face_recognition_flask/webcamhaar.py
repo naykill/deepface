@@ -12,25 +12,25 @@ import paho.mqtt.client as mqtt
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# # MQTT setup
-# MQTT_BROKER = "172.254.3.114"  # Replace with your MQTT broker IP/hostname
-# MQTT_PORT = 1884
-# MQTT_TOPIC = "gate/open"
-# MQTT_USER = 'tlab'  # Replace with your MQTT username
-# MQTT_PASSWORD = '1234'  # Replace with your MQTT password
-# mqtt_client = mqtt.Client()
+# MQTT setup
+MQTT_BROKER = "172.254.3.114"  # Replace with your MQTT broker IP/hostname
+MQTT_PORT = 1884
+MQTT_TOPIC = "gate/open"
+MQTT_USER = 'tlab'  # Replace with your MQTT username
+MQTT_PASSWORD = '1234'  # Replace with your MQTT password
+mqtt_client = mqtt.Client()
 
-# def on_connect(client, userdata, flags, rc):
-#     if rc == 0:
-#         logger.info("Connected to MQTT broker")
-#     else:
-#         logger.error("Failed to connect to MQTT broker, Return code %d", rc)
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        logger.info("Connected to MQTT broker")
+    else:
+        logger.error("Failed to connect to MQTT broker, Return code %d", rc)
 
-# mqtt_client.on_connect = on_connect
-# # Set the username and password for MQTT
-# mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
-# mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Corrected connection
-# mqtt_client.loop_start()
+mqtt_client.on_connect = on_connect
+# Set the username and password for MQTT
+mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Corrected connection
+mqtt_client.loop_start()
 
 def speak_text(text):
     tts = gTTS(text=text, lang='id')
@@ -49,8 +49,8 @@ def get_time_period():
         return "malam"
         
 class FaceDetectionSystem:
-    def __init__(self):  # Corrected __init__
-        self.SERVER_URL = "http://192.168.0.106:5000"
+    def _init_(self):
+        self.SERVER_URL = "http://172.254.3.21:5000"
         self.CAPTURE_INTERVAL = 5
         self.CHECKOUT_INTERVAL = 600
         self.FRAME_SKIP = 2
@@ -101,7 +101,7 @@ class FaceDetectionSystem:
                         record["status"] = "masuk"
                         record["check_in_time"] = current_time
                         logger.info(f"{employee_name} checked in")
-                        # mqtt_client.publish(MQTT_TOPIC, f"{employee_name} checked in")
+                        mqtt_client.publish(MQTT_TOPIC, f"{employee_name} checked in")
 
                     elif record["status"] == "masuk":
                         time_since_checkin = current_time - record["check_in_time"]
@@ -110,7 +110,7 @@ class FaceDetectionSystem:
                             record["status"] = "keluar"
                             record["check_in_time"] = None
                             logger.info(f"{employee_name} checked out after {time_since_checkin/60:.1f} minutes")
-                            # mqtt_client.publish(MQTT_TOPIC, f"{employee_name} checked out")
+                            mqtt_client.publish(MQTT_TOPIC, f"{employee_name} checked out")
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Server communication error: {e}")

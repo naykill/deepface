@@ -11,10 +11,12 @@ import json
 from datetime import datetime, timedelta
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cosine
-import logging
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app) if os.getenv('CORS_ENABLED', 'True').lower() == 'true' else None
 
 # Konfigurasi logging custom
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -24,7 +26,10 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 
 # Path to SQLite database
-db_path = './face_embeddings.db'
+db_path = os.getenv('DB_PATH')
+model_name = os.getenv('FACE_RECOGNITION_MODEL')
+detector_backend = os.getenv('FACE_DETECTOR_BACKEND')
+recognition_threshold = float(os.getenv('FACE_RECOGNITION_THRESHOLD'))
 
 # Initialize SQLite database and create tables if they don't exist
 def init_db():
@@ -157,28 +162,6 @@ class EnhancedFaceRecognition:
         
         return name, position, confidence
 
-@app.after_request
-def custom_log(response):
-    # Dapatkan informasi IP, metode, path, dan kode status
-    ip_address = request.remote_addr
-    method = request.method
-    path = request.path
-    status_code = response.status_code
-
-    # Tentukan pesan sesuai dengan status kode
-    if status_code == 200:
-        message = "berhasil mendapatkan data employees."
-    elif status_code == 404:
-        message = "data tidak ditemukan."
-    else:
-        message = response.status
-
-    # Format log
-    log_message = f'{ip_address} - - [{datetime.now().strftime("%d/%b/%Y %H:%M:%S")}] "{method} {path} HTTP/1.1" {status_code} {message}'
-    app.logger.info(log_message)
-
-    return response
-
 @app.route('/register-employee', methods=['POST'])
 def register_employee():
     data = request.json
@@ -250,7 +233,7 @@ def identify_employee():
             embeddings.append(embedding)
             employee_details.append((emp['name'], emp['position']))
 
-        recognition = EnhancedFaceRecognition(threshold=0.3)
+        recognition = EnhancedFaceRecognition(recognition_threshold)
         recognition.build_index(embeddings, employee_details)
         
         name, position, confidence = recognition.identify(target_embedding)

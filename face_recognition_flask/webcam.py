@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 
 # Initialize webcam
-cap = cv2.VideoCapture(0)  # Change to 1 for external webcam
+cap = cv2.VideoCapture("http://172.254.0.124:2000/video")  # Change to 1 for external webcam
 if not cap.isOpened():
     print("Error: Cannot open webcam. Make sure the camera is connected and working.")
     exit()
@@ -16,8 +16,8 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 SERVER_URL = "http://192.168.0.106:5000"
 
 # ESP32 URLs for controlling the gate
-# ESP32_URL_OPEN = "http://172.254.2.78/open-gate"
-# ESP32_URL_CLOSE = "http://172.254.2.78/close-gate"
+ESP32_URL_OPEN = "http://172.254.2.78/open-gate"
+ESP32_URL_CLOSE = "http://172.254.2.78/close-gate"
 
 # Set capture interval (5 seconds)
 capture_interval = 5
