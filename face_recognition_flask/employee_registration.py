@@ -13,7 +13,7 @@ from datetime import datetime
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
-SERVER_URL = "http://172.254.3.21:5000"
+SERVER_URL = "http://192.168.0.106:5000"
 
 # List of positions available
 positions = [
