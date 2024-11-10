@@ -14,6 +14,7 @@ from scipy.spatial.distance import cosine
 from dotenv import load_dotenv
 import os
 import logging
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -606,4 +607,6 @@ def delete_employee(employee_id):
 
 if __name__ == '__main__':
     init_db()  # Initialize the database
+    print("Akses aplikasi di http://0.0.0.0:5000 atau http://<IP-Address>:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
+    
