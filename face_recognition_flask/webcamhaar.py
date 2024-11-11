@@ -124,8 +124,8 @@ class FaceDetectionSystem:
                 last_status = last_attendance['status'] if last_attendance else 'keluar'
 
                 # Konversi waktu check-in dan check-out ke timestamp
-                last_check_in_timestamp = time.mktime(datetime.strptime(last_check_in_time, "%H:%M:%S").timetuple()) if last_check_in_time else None
-                last_check_out_timestamp = time.mktime(datetime.strptime(last_check_out_time, "%H:%M:%S").timetuple()) if last_check_out_time else None
+                last_check_in_timestamp = datetime.strptime(last_check_in_time, "%H:%M:%S").timestamp() if last_check_in_time else None
+                last_check_out_timestamp = datetime.strptime(last_check_out_time, "%H:%M:%S").timestamp() if last_check_out_time else None
 
                 if employee_name not in self.attendance_records:
                     self.attendance_records[employee_name] = {
