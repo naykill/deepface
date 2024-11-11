@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # MQTT setup
-MQTT_BROKER = "172.254.3.114"  # Replace with your MQTT broker IP/hostname
+MQTT_BROKER = MQTT_BROKER  # Replace with your MQTT broker IP/hostname
 MQTT_PORT = MQTT_PORT
 MQTT_TOPIC = MQTT_TOPIC
 MQTT_USER = MQTT_USER  # Replace with your MQTT username
@@ -60,7 +60,7 @@ def get_time_period():
         return "malam"
         
 class FaceDetectionSystem:
-    def _init_(self):
+    def __init__(self):
         self.SERVER_URL = SERVER_URL
         self.CAPTURE_INTERVAL = 5
         self.CHECKOUT_INTERVAL = 600
@@ -70,7 +70,7 @@ class FaceDetectionSystem:
         self.last_unknown_detection = 0
         self.attendance_records = {}
         self.last_detection_time = {}
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture('http://172.254.0.124:2000/video')
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.frame_count = 0
         self.last_capture_time = time.time()
