@@ -13,10 +13,19 @@ from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cosine
 from dotenv import load_dotenv
 import os
+import logging
+
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app) if os.getenv('CORS_ENABLED', 'True').lower() == 'true' else None
+
+# Konfigurasi logging custom
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+# Menonaktifkan log default Flask
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
 
 # Path to SQLite database
 db_path = os.getenv('DB_PATH')
@@ -155,6 +164,28 @@ class EnhancedFaceRecognition:
         
         return name, position, confidence
 
+@app.after_request
+def custom_log(response):
+    # Dapatkan informasi IP, metode, path, dan kode status
+    ip_address = request.remote_addr
+    method = request.method
+    path = request.path
+    status_code = response.status_code
+
+    # Tentukan pesan sesuai dengan status kode
+    if status_code == 200:
+        message = "berhasil mendapatkan data employees."
+    elif status_code == 404:
+        message = "data tidak ditemukan."
+    else:
+        message = response.status
+
+    # Format log
+    log_message = f'{ip_address} - - [{datetime.now().strftime("%d/%b/%Y %H:%M:%S")}] "{method} {path} HTTP/1.1" {status_code} {message}'
+    app.logger.info(log_message)
+
+    return response
+
 @app.route('/register-employee', methods=['POST'])
 def register_employee():
     data = request.json
@@ -162,8 +193,8 @@ def register_employee():
     position = data['position']
     image_base64 = data['image']  # The base64 image data
 
-    model_name = model_name
-    detector_backend = detector_backend
+    model_name = "Facenet"
+    detector_backend = "opencv"
 
     try:
         # Decode base64 image to process it with DeepFace
@@ -211,8 +242,8 @@ def identify_employee():
 
         target_embedding = DeepFace.represent(
             img_path=img,
-            model_name=model_name,
-            detector_backend=detector_backend,
+            model_name="Facenet",
+            detector_backend="opencv",
             enforce_detection=False
         )[0]["embedding"]
 
@@ -576,4 +607,6 @@ def delete_employee(employee_id):
 
 if __name__ == '__main__':
     init_db()  # Initialize the database
+    print("Akses aplikasi di http://0.0.0.0:5000 atau http://<IP-Address>:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
+    
