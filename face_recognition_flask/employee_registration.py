@@ -25,8 +25,6 @@ FACE_CASCADE_PATH = os.getenv('FACE_CASCADE_PATH')
 def convert_image_to_base64(image):
     return base64.b64encode(image.read()).decode("utf-8")
 
-SERVER_URL = "http://192.168.0.106:5000"
-
 # List of positions available
 positions = [
     "President Director", "IT Manager", "Software Engineer", "Data Analyst", 
