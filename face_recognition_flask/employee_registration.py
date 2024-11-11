@@ -15,11 +15,11 @@ load_dotenv()
 
 # Konfigurasi aplikasi
 SERVER_URL = os.getenv('BACKEND_SERVER_URL')
-STREAMLIT_PORT = int(os.getenv('STREAMLIT_SERVER_PORT', 8501))
+STREAMLIT_PORT = int(os.getenv('STREAMLIT_SERVER_PORT'))
 STREAMLIT_ADDRESS = os.getenv('STREAMLIT_SERVER_ADDRESS', '0.0.0.0')
 IMAGE_TYPES = os.getenv('IMAGE_UPLOAD_TYPES', 'jpg,jpeg,png').split(',')
-DATE_FORMAT = os.getenv('DEFAULT_DATE_FORMAT', '%Y-%m-%d')
-TIME_FORMAT = os.getenv('DEFAULT_TIME_FORMAT', '%H:%M:%S')
+DATE_FORMAT = os.getenv('DEFAULT_DATE_FORMAT')
+TIME_FORMAT = os.getenv('DEFAULT_TIME_FORMAT')
 FACE_CASCADE_PATH = os.getenv('FACE_CASCADE_PATH')
 # Function to convert file image to base64
 def convert_image_to_base64(image):
