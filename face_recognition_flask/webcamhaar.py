@@ -147,7 +147,7 @@ class FaceDetectionSystem:
                             return
 
                     # Jika belum check-in atau lebih dari 10 menit setelah checkout, lakukan check-in
-                    if record["status"] == "keluar" and not record["check_in_time"]:
+                    elif record["status"] == "keluar" and not record["check_in_time"]:
                         self._record_attendance(employee_name, face_data, "masuk")
                         record["status"] = "masuk"
                         record["check_in_time"] = current_time
