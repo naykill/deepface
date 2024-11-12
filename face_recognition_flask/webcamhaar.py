@@ -190,8 +190,12 @@ class FaceDetectionSystem:
                     logger.info(f"{employee_name} {status} - {time_period}")
                 
                 # Text-to-speech announcement
-                speak_text(f"Selamat {time_period} {employee_name}, silakan {status}")
-                
+                if status == "masuk":
+                    speak_text(f"Selamat {time_period} {employee_name}, selamat datang di ti leb, silakan {status}")
+
+                else :
+                    speak_text(f"sampai jumpa {employee_name}, hati-hati di jalan")
+                                   
             elif response.status_code == 400 and "early_checkout" in response.json().get("status", ""):
                 logger.warning(f"Early checkout attempt for {employee_name} - Minimum working time not reached")
             else:
