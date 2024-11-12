@@ -113,7 +113,7 @@ def convert_embedding(blob):
     return np.frombuffer(blob, dtype='f')
 
 class EnhancedFaceRecognition:
-    def __init__(self, threshold=0.6):
+    def __init__(self, threshold=os.getenv('FACE_RECOGNITION_THRESHOLD')):
         self.threshold = threshold
         self.index = None
         self.employee_details = []
