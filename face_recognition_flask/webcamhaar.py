@@ -20,6 +20,7 @@ MQTT_TOPIC = os.getenv('MQTT_TOPIC')
 MQTT_USER = os.getenv('MQTT_USERNAME')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 SERVER_URL = os.getenv('BACKEND_SERVER_URL')
+CAMERA_CONFIG = os.getenv('CAMERA_CONFIGURE')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ class FaceDetectionSystem:
         self.last_unknown_detection = 0
         self.attendance_records = {}
         self.last_detection_time = {}
-        self.cap = cv2.VideoCapture('http://172.254.1.122:4747/video')
+        self.cap = cv2.VideoCapture(CAMERA_CONFIG)
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.frame_count = 0
         self.last_capture_time = time.time()
