@@ -229,8 +229,8 @@ class FaceDetectionSystem:
                 logger.info(f"Successfully recorded unknown person: {unknown_id}")
                 
                 # MQTT and speech
-                mqtt_client.publish(MQTT_TOPIC, "Gate remains open for unknown person")
-                speak_text(f"Tamu, Selamat {get_time_period()}.")
+                # mqtt_client.publish(MQTT_TOPIC, "Gate remains open for unknown person")
+                speak_text(f"Selamat datang di ti leb")
             else:
                 logger.error(f"Failed to record unknown person: {response.text}")
                 
