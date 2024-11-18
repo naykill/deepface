@@ -155,7 +155,7 @@ class FaceDetectionSystem:
         self.DETECTION_SCALE = 0.5
         self.attendance_records = {}
         self.cap = cv2.VideoCapture(CAMERA_CONFIG)
-        self.detector_backend = "opencv"
+        self.detector_backend = "mtcnn"
         self.frame_count = 0
         self.last_capture_time = time.time()
     
