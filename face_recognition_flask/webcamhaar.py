@@ -229,8 +229,8 @@ class FaceDetectionSystem:
                 logger.info(f"Successfully recorded unknown person: {unknown_id}")
                 
                 # MQTT and speech
-                mqtt_client.publish(MQTT_TOPIC, "Gate remains open for unknown person")
-                speak_text(f"Tamu, Selamat {get_time_period()}.")
+                # mqtt_client.publish(MQTT_TOPIC, "Gate remains open for unknown person")
+                speak_text(f"Selamat datang di ti leb")
             else:
                 logger.error(f"Failed to record unknown person: {response.text}")
                 
@@ -370,7 +370,7 @@ class FaceDetectionSystem:
             
             _, buffer = cv2.imencode('.jpg', face)
             face_base64 = base64.b64encode(buffer).decode('utf-8')
-            logger.info(f"Captured face for unknown person, size: {len(face_base64)} bytes")
+            logger.info(f"Captured face, size: {len(face_base64)} bytes")
 
             self._handle_face_recognition(face_base64)
             self.last_capture_time = current_time

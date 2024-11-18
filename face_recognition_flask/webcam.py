@@ -13,7 +13,7 @@ if not cap.isOpened():
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-SERVER_URL = "http://172.254.2.153:5000"
+SERVER_URL = "http://192.168.0.106:5000"
 
 # ESP32 URLs for controlling the gate
 ESP32_URL_OPEN = "http://172.254.2.78/open-gate"
